@@ -20,4 +20,6 @@ android {
   }
 }
 
-dependencies {}
+dependencies {
+  api 'io.straas.android.sdk:straas-streaming-base:0.9.0'
+}

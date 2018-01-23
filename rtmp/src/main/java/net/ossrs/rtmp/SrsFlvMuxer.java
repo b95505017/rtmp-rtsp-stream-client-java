@@ -3,11 +3,15 @@ package net.ossrs.rtmp;
 import android.media.MediaCodec;
 import android.os.Process;
 import android.util.Log;
-import com.github.faucamp.simplertmp.DefaultRtmpPublisher;
+
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+
+import io.straas.android.sdk.streaming.base.rtmp.DefaultRtmpClient;
+import io.straas.android.sdk.streaming.base.rtmp.RtmpClient;
 
 /**
  * Created by winlin on 5/2/15.
@@ -49,7 +53,7 @@ public class SrsFlvMuxer {
   private static final int VIDEO_ALLOC_SIZE = 128 * 1024;
   private static final int AUDIO_ALLOC_SIZE = 4 * 1024;
   private volatile boolean connected = false;
-  private DefaultRtmpPublisher publisher;
+  private DefaultRtmpClient publisher;
   private Thread worker;
   private SrsFlv flv = new SrsFlv();
   private boolean needToFindKeyFrame = true;
@@ -66,9 +70,59 @@ public class SrsFlvMuxer {
   /**
    * constructor.
    */
-  public SrsFlvMuxer(ConnectCheckerRtmp connectCheckerRtmp) {
+  public SrsFlvMuxer(final ConnectCheckerRtmp connectCheckerRtmp) {
     this.connectCheckerRtmp = connectCheckerRtmp;
-    publisher = new DefaultRtmpPublisher(connectCheckerRtmp);
+    publisher = new DefaultRtmpClient(new RtmpClient.EventHandler() {
+      @Override
+      public void onRtmpConnecting(String s) {
+
+      }
+
+      @Override
+      public void onRtmpConnected(String s) {
+        connectCheckerRtmp.onConnectionSuccessRtmp();
+      }
+
+      @Override
+      public void onRtmpVideoStreaming(String s) {
+
+      }
+
+      @Override
+      public void onRtmpAudioStreaming(String s) {
+
+      }
+
+      @Override
+      public void onRtmpStopped(String s) {
+
+      }
+
+      @Override
+      public void onRtmpDisconnected(String s) {
+
+      }
+
+      @Override
+      public void onRtmpOutputFps(double v) {
+
+      }
+
+      @Override
+      public void onRtmpVideoBitrate(double v) {
+
+      }
+
+      @Override
+      public void onRtmpAudioBitrate(double v) {
+
+      }
+
+      @Override
+      public void onRtmpException(Exception e) {
+
+      }
+    });
   }
 
   public void setProfileIop(byte profileIop)
@@ -90,7 +144,7 @@ public class SrsFlvMuxer {
   }
 
   public void setAuthorization(String user, String password) {
-    publisher.setAuthorization(user, password);
+    // publisher.setAuthorization(user, password);
   }
 
   /**
@@ -107,7 +161,8 @@ public class SrsFlvMuxer {
 
   private void disconnect(ConnectCheckerRtmp connectChecker) {
     try {
-      publisher.close();
+      publisher.closeStream();
+      publisher.shutdown();
     } catch (IllegalStateException e) {
       // Ignore illegal state.
     }
@@ -118,7 +173,7 @@ public class SrsFlvMuxer {
     Log.i(TAG, "worker: disconnect ok.");
   }
 
-  private boolean connect(String url) {
+  private boolean connect(String url) throws IOException {
     if (!connected) {
       Log.i(TAG, String.format("worker: connecting to RTMP server by url=%s\n", url));
       if (publisher.connect(url)) {
@@ -141,10 +196,10 @@ public class SrsFlvMuxer {
             String.format("worker: send frame type=%d, dts=%d, size=%dB", frame.type, frame.dts,
                 frame.flvTag.array().length));
       }
-      publisher.publishVideoData(frame.flvTag.array(), frame.flvTag.size(), frame.dts);
+      publisher.publishVideoData(frame.flvTag.array(), frame.dts);
       mVideoAllocator.release(frame.flvTag);
     } else if (frame.is_audio()) {
-      publisher.publishAudioData(frame.flvTag.array(), frame.flvTag.size(), frame.dts);
+      publisher.publishAudioData(frame.flvTag.array(), frame.dts);
       mAudioAllocator.release(frame.flvTag);
     }
   }
@@ -157,8 +212,12 @@ public class SrsFlvMuxer {
       @Override
       public void run() {
         android.os.Process.setThreadPriority(Process.THREAD_PRIORITY_MORE_FAVORABLE);
-        if (!connect(rtmpUrl)) {
-          return;
+        try {
+          if (!connect(rtmpUrl)) {
+            return;
+          }
+        } catch (IOException e) {
+          e.printStackTrace();
         }
         connectCheckerRtmp.onConnectionSuccessRtmp();
         while (!Thread.interrupted()) {
