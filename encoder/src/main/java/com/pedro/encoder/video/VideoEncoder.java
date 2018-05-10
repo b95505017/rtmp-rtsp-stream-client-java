@@ -220,6 +220,7 @@ public class VideoEncoder implements GetCameraData {
           thread = new Thread(new Runnable() {
             @Override
             public void run() {
+              YUVUtil.preAllocateBuffers(width * height * 3 / 2);
               while (!Thread.interrupted()) {
                 try {
                   Frame frame = queue.take();
@@ -260,7 +261,7 @@ public class VideoEncoder implements GetCameraData {
       if (thread != null) {
         thread.interrupt();
         try {
-          thread.join();
+          thread.join(1000);
         } catch (InterruptedException e) {
           thread.interrupt();
         }
