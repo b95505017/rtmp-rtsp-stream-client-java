@@ -15,7 +15,7 @@ import java.nio.ByteOrder;
  */
 
 @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
-public class GammaFilterRender extends BaseFilterRender{
+public class GammaFilterRender extends BaseFilterRender {
 
   //rotation matrix
   private final float[] squareVertexDataFilter = {
@@ -84,11 +84,14 @@ public class GammaFilterRender extends BaseFilterRender{
 
   @Override
   public void release() {
+    GLES20.glDeleteProgram(program);
+  }
 
+  public float getGamma() {
+    return gamma;
   }
 
   /**
-   *
    * @param gamma Range should be between 0.0 - 2.0 with 1.0 being normal.
    */
   public void setGamma(float gamma) {

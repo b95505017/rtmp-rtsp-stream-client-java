@@ -14,19 +14,19 @@ public class AmfBoolean implements AmfData {
 
   private boolean value;
 
-  public AmfBoolean(boolean value) {
-    this.value = value;
-  }
-
-  public AmfBoolean() {
-  }
-
   public boolean isValue() {
     return value;
   }
 
   public void setValue(boolean value) {
     this.value = value;
+  }
+
+  public AmfBoolean(boolean value) {
+    this.value = value;
+  }
+
+  public AmfBoolean() {
   }
 
   @Override

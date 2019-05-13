@@ -30,8 +30,6 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.net.SocketException;
 import java.util.Random;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -57,11 +55,8 @@ public class RtmpConnection implements RtmpPublisher {
 
   private static final String TAG = "RtmpConnection";
   private static final Pattern rtmpUrlPattern =
-          Pattern.compile("^rtmp://([^/:]+)(:(\\d+))*/([^/]+)(/(.*))*$");
-  private static final Pattern rtmpsUrlPattern =
-          Pattern.compile("^rtmps://([^/:]+)(:(\\d+))*/([^/]+)(/(.*))*$");
-  private final Object connectingLock = new Object();
-  private final Object publishLock = new Object();
+          Pattern.compile("^rtmps?://([^/:]+)(?::(\\d+))*/([^/]+)/?([^*]*)$");
+
   private int port;
   private String host;
   private String appName;
@@ -79,6 +74,8 @@ public class RtmpConnection implements RtmpPublisher {
   private Thread rxPacketHandler;
   private volatile boolean connected = false;
   private volatile boolean publishPermitted = false;
+  private final Object connectingLock = new Object();
+  private final Object publishLock = new Object();
   private int currentStreamId = 0;
   private int transactionIdCounter = 0;
   private int videoWidth;
@@ -93,6 +90,7 @@ public class RtmpConnection implements RtmpPublisher {
   private String challenge = null;
   private String opaque = null;
   private boolean onAuth = false;
+  private String netConnectionDescription;
 
   public RtmpConnection(ConnectCheckerRtmp connectCheckerRtmp) {
     this.connectCheckerRtmp = connectCheckerRtmp;
@@ -113,28 +111,22 @@ public class RtmpConnection implements RtmpPublisher {
   @Override
   public boolean connect(String url) {
     Matcher rtmpMatcher = rtmpUrlPattern.matcher(url);
-    Matcher rtmpsMatcher = rtmpsUrlPattern.matcher(url);
-    Matcher matcher;
     if (rtmpMatcher.matches()) {
-      matcher = rtmpMatcher;
-      tlsEnabled = false;
-    } else if (rtmpsMatcher.matches()) {
-      matcher = rtmpsMatcher;
-      tlsEnabled = true;
+      tlsEnabled = rtmpMatcher.group(0).startsWith("rtmps");
     } else {
       connectCheckerRtmp.onConnectionFailedRtmp(
               "Endpoint malformed, should be: rtmp://ip:port/appname/streamname");
       return false;
     }
 
-    tcUrl = url.substring(0, url.lastIndexOf('/'));
     swfUrl = "";
     pageUrl = "";
-    host = matcher.group(1);
-    String portStr = matcher.group(3);
+    host = rtmpMatcher.group(1);
+    String portStr = rtmpMatcher.group(2);
     port = portStr != null ? Integer.parseInt(portStr) : 1935;
-    appName = matcher.group(4);
-    streamName = matcher.group(6);
+    appName = rtmpMatcher.group(3);
+    streamName = rtmpMatcher.group(4);
+    tcUrl = rtmpMatcher.group(0).substring(0, rtmpMatcher.group(0).length() - streamName.length());
 
     // socket connection
     Log.d(TAG, "connect() called. Host: "
@@ -151,7 +143,7 @@ public class RtmpConnection implements RtmpPublisher {
       if (!tlsEnabled) {
         socket = new Socket();
         SocketAddress socketAddress = new InetSocketAddress(host, port);
-        socket.connect(socketAddress, 3000);
+        socket.connect(socketAddress, 5000);
       } else {
         socket = CreateSSLSocket.createSSlSocket(host, port);
         if (socket == null) throw new IOException("Socket creation failed");
@@ -172,12 +164,8 @@ public class RtmpConnection implements RtmpPublisher {
 
       @Override
       public void run() {
-        try {
-          Log.d(TAG, "starting main rx handler loop");
-          handleRxPacketLoop();
-        } catch (IOException ex) {
-          Logger.getLogger(RtmpConnection.class.getName()).log(Level.SEVERE, null, ex);
-        }
+        Log.d(TAG, "starting main rx handler loop");
+        handleRxPacketLoop();
       }
     });
     rxPacketHandler.start();
@@ -253,7 +241,7 @@ public class RtmpConnection implements RtmpPublisher {
   }
 
   private void sendConnectAuthPacketFinal(String user, String password, String salt,
-                                          String challenge, String opaque) {
+      String challenge, String opaque) {
     String challenge2 = String.format("%08x", new Random().nextInt());
     String response = Util.stringToMD5BASE64(user + salt + password);
     if (!opaque.isEmpty()) {
@@ -306,6 +294,7 @@ public class RtmpConnection implements RtmpPublisher {
               "Create stream failed, connected= " + connected + ", StreamId= " + currentStreamId);
       return false;
     }
+    netConnectionDescription = null;
 
     Log.d(TAG, "createStream(): Sending releaseStream command...");
     // transactionId == 2
@@ -341,7 +330,12 @@ public class RtmpConnection implements RtmpPublisher {
     }
     if (!publishPermitted) {
       shutdown(true);
-      connectCheckerRtmp.onConnectionFailedRtmp("Error configure stream, publish permitted failed");
+      if (netConnectionDescription != null && !netConnectionDescription.isEmpty()) {
+        connectCheckerRtmp.onConnectionFailedRtmp(netConnectionDescription);
+      } else {
+        connectCheckerRtmp.onConnectionFailedRtmp(
+                "Error configure stream, publish permitted failed");
+      }
     }
     return publishPermitted;
   }
@@ -423,7 +417,7 @@ public class RtmpConnection implements RtmpPublisher {
       if (rxPacketHandler != null) {
         rxPacketHandler.interrupt();
         try {
-          rxPacketHandler.join(1000);
+          rxPacketHandler.join(100);
         } catch (InterruptedException ie) {
           rxPacketHandler.interrupt();
         }
@@ -447,6 +441,7 @@ public class RtmpConnection implements RtmpPublisher {
   private void reset() {
     connected = false;
     publishPermitted = false;
+    netConnectionDescription = null;
     tcUrl = null;
     swfUrl = null;
     pageUrl = null;
@@ -529,7 +524,7 @@ public class RtmpConnection implements RtmpPublisher {
     }
   }
 
-  private void handleRxPacketLoop() throws IOException {
+  private void handleRxPacketLoop() {
     // Handle all queued received RTMP packets
     while (!Thread.interrupted()) {
       try {
@@ -599,7 +594,7 @@ public class RtmpConnection implements RtmpPublisher {
     }
   }
 
-  private void handleRxInvoke(Command invoke) throws IOException {
+  private void handleRxInvoke(Command invoke) {
     String commandName = invoke.getCommandName();
     switch (commandName) {
       case "_error":
@@ -629,6 +624,7 @@ public class RtmpConnection implements RtmpPublisher {
               socket = new Socket(host, port);
             } else {
               socket = CreateSSLSocket.createSSlSocket(host, port);
+              if (socket == null) throw new IOException("Socket creation failed");
             }
             inputStream = Okio.buffer(Okio.source(socket));
             outputStream = Okio.buffer(Okio.sink(socket));
@@ -640,11 +636,7 @@ public class RtmpConnection implements RtmpPublisher {
             rxPacketHandler = new Thread(new Runnable() {
               @Override
               public void run() {
-                try {
-                  handleRxPacketLoop();
-                } catch (IOException e) {
-                  e.printStackTrace();
-                }
+                handleRxPacketLoop();
               }
             });
             rxPacketHandler.start();
@@ -715,6 +707,13 @@ public class RtmpConnection implements RtmpPublisher {
           onMetaData();
           // We can now publish AV data
           publishPermitted = true;
+          synchronized (publishLock) {
+            publishLock.notifyAll();
+          }
+        } else if (code.equals("NetConnection.Connect.Rejected")) {
+          netConnectionDescription = ((AmfString) ((AmfObject) invoke.getData().get(1)).getProperty(
+                  "description")).getValue();
+          publishPermitted = false;
           synchronized (publishLock) {
             publishLock.notifyAll();
           }

@@ -13,20 +13,21 @@ import com.pedro.encoder.audio.DataTaken;
 public class MicrophoneManager {
 
   private final String TAG = "MicrophoneManager";
-  public static final int BUFFER_SIZE = 4096;
+  private static final int BUFFER_SIZE = 4096;
   private AudioRecord audioRecord;
   private GetMicrophoneData getMicrophoneData;
   private byte[] pcmBuffer = new byte[BUFFER_SIZE];
-  private byte[] pcmBufferMuted = new byte[11];
+  private byte[] pcmBufferMuted = new byte[BUFFER_SIZE];
   private boolean running = false;
   private boolean created = false;
 
   //default parameters for microphone
-  private int sampleRate = 44100; //hz
+  private int sampleRate = 32000; //hz
   private int audioFormat = AudioFormat.ENCODING_PCM_16BIT;
   private int channel = AudioFormat.CHANNEL_IN_STEREO;
   private boolean muted = false;
   private AudioPostProcessEffect audioPostProcessEffect;
+  private Thread thread;
 
   public MicrophoneManager(GetMicrophoneData getMicrophoneData) {
     this.getMicrophoneData = getMicrophoneData;
@@ -62,24 +63,21 @@ public class MicrophoneManager {
    * Start record and get data
    */
   public void start() {
-    if (isCreated()) {
-      init();
-      new Thread(new Runnable() {
-        @Override
-        public void run() {
-          while (running && !Thread.interrupted()) {
-            DataTaken dataTaken = read();
-            if (dataTaken != null) {
-              getMicrophoneData.inputPCMData(dataTaken.getPcmBuffer(), dataTaken.getSize());
-            } else {
-              running = false;
-            }
+    init();
+    thread = new Thread(new Runnable() {
+      @Override
+      public void run() {
+        while (running && !Thread.interrupted()) {
+          DataTaken dataTaken = read();
+          if (dataTaken != null) {
+            getMicrophoneData.inputPCMData(dataTaken.getPcmBuffer(), dataTaken.getSize());
+          } else {
+            running = false;
           }
         }
-      }).start();
-    } else {
-      Log.e(TAG, "Microphone no created, MicrophoneManager not enabled");
-    }
+      }
+    });
+    thread.start();
   }
 
   private void init() {
@@ -109,16 +107,11 @@ public class MicrophoneManager {
    * @return Object with size and PCM buffer data
    */
   private DataTaken read() {
-    int size;
-    if (muted) {
-      size = audioRecord.read(pcmBufferMuted, 0, pcmBufferMuted.length);
-    } else {
-      size = audioRecord.read(pcmBuffer, 0, pcmBuffer.length);
-    }
+    int size = audioRecord.read(pcmBuffer, 0, pcmBuffer.length);
     if (size <= 0) {
       return null;
     }
-    return new DataTaken(pcmBuffer, size);
+    return new DataTaken(muted ? pcmBufferMuted : pcmBuffer, size);
   }
 
   /**
@@ -127,6 +120,15 @@ public class MicrophoneManager {
   public void stop() {
     running = false;
     created = false;
+    if (thread != null) {
+      thread.interrupt();
+      try {
+        thread.join(100);
+      } catch (InterruptedException e) {
+        thread.interrupt();
+      }
+    }
+    thread = null;
     if (audioRecord != null) {
       audioRecord.setRecordPositionUpdateListener(null);
       audioRecord.stop();

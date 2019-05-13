@@ -91,7 +91,19 @@ public class ColorFilterRender extends BaseFilterRender {
 
   @Override
   public void release() {
+    GLES20.glDeleteProgram(program);
+  }
 
+  public float getRed() {
+    return red;
+  }
+
+  public float getGreen() {
+    return green;
+  }
+
+  public float getBlue() {
+    return blue;
   }
 
   /**

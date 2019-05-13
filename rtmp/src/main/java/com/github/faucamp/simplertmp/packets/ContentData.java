@@ -41,7 +41,7 @@ public abstract class ContentData extends RtmpPacket {
    * useful for dumping audio/video streams
    */
   @Override
-  public void writeBody(BufferedSink out) throws IOException {
+  public void writeBody(BufferedSink out) {
   }
 
   @Override

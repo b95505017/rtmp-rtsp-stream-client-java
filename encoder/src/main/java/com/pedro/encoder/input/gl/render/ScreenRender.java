@@ -7,6 +7,7 @@ import android.os.Build;
 import android.support.annotation.RequiresApi;
 import com.pedro.encoder.R;
 import com.pedro.encoder.utils.gl.GlUtil;
+import com.pedro.encoder.utils.gl.PreviewSizeCalculator;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
@@ -60,9 +61,7 @@ public class ScreenRender {
   public void initGl(Context context) {
     GlUtil.checkGlError("initGl start");
     String vertexShader = GlUtil.getStringFromRaw(context, R.raw.simple_vertex);
-    //String fragmentShader = GlUtil.getStringFromRaw(context, R.raw.simple_fragment);
     String fragmentShader = GlUtil.getStringFromRaw(context, R.raw.fxaa);
-    //String fragmentShader = GlUtil.getStringFromRaw(context, R.raw.fxaa_pc);
 
     program = GlUtil.createProgram(vertexShader, fragmentShader);
     aPositionHandle = GLES20.glGetAttribLocation(program, "aPosition");
@@ -78,17 +77,12 @@ public class ScreenRender {
   public void draw(int width, int height, boolean keepAspectRatio) {
     GlUtil.checkGlError("drawScreen start");
 
-    if (keepAspectRatio) {
-      if (width > height) { //landscape
-        int realWidth = height * streamWidth / streamHeight;
-        GLES20.glViewport((width - realWidth) / 2, 0, realWidth, height);
-      } else { //portrait
-        int realHeight = width * streamHeight / streamWidth;
-        GLES20.glViewport(0, (height - realHeight) / 2, width, realHeight);
-      }
-    } else {
-      GLES20.glViewport(0, 0, width, height);
-    }
+    PreviewSizeCalculator.calculateViewPort(keepAspectRatio, width, height, streamWidth,
+        streamHeight);
+
+    GLES20.glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT | GLES20.GL_COLOR_BUFFER_BIT);
+
     GLES20.glUseProgram(program);
 
     squareVertex.position(BaseRenderOffScreen.SQUARE_VERTEX_DATA_POS_OFFSET);
@@ -105,6 +99,7 @@ public class ScreenRender {
     GLES20.glUniformMatrix4fv(uSTMatrixHandle, 1, false, STMatrix, 0);
     GLES20.glUniform2f(uResolutionHandle, width, height);
     GLES20.glUniform1f(uAAEnabledHandle, AAEnabled ? 1f : 0f);
+
     GLES20.glUniform1i(uSamplerHandle, 5);
     GLES20.glActiveTexture(GLES20.GL_TEXTURE5);
     GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texId);
@@ -115,7 +110,7 @@ public class ScreenRender {
   }
 
   public void release() {
-
+    GLES20.glDeleteProgram(program);
   }
 
   public void setTexId(int texId) {

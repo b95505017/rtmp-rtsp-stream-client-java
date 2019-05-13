@@ -15,7 +15,7 @@ import java.nio.ByteOrder;
  */
 
 @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
-public class EarlyBirdFilterRender extends BaseFilterRender{
+public class EarlyBirdFilterRender extends BaseFilterRender {
 
   //rotation matrix
   private final float[] squareVertexDataFilter = {
@@ -82,6 +82,6 @@ public class EarlyBirdFilterRender extends BaseFilterRender{
 
   @Override
   public void release() {
-
+    GLES20.glDeleteProgram(program);
   }
 }

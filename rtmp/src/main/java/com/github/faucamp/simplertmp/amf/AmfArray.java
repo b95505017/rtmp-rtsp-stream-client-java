@@ -49,9 +49,7 @@ public class AmfArray implements AmfData {
     return size;
   }
 
-  /**
-   * @return the amount of items in this the array
-   */
+  /** @return the amount of items in this the array */
   public int getLength() {
     return items != null ? items.size() : 0;
   }

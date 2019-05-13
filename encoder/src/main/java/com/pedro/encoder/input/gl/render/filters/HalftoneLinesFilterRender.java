@@ -103,7 +103,27 @@ public class HalftoneLinesFilterRender extends BaseFilterRender {
 
   @Override
   public void release() {
+    GLES20.glDeleteProgram(program);
+  }
 
+  public float getMode() {
+    return mode;
+  }
+
+  public float getRows() {
+    return rows;
+  }
+
+  public float getRotation() {
+    return rotation;
+  }
+
+  public float getAntialias() {
+    return antialias;
+  }
+
+  public float[] getSampleDist() {
+    return sampleDist;
   }
 
   /**

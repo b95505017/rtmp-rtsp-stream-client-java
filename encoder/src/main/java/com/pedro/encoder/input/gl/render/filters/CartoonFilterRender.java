@@ -15,7 +15,7 @@ import java.nio.ByteOrder;
  */
 
 @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
-public class CartoonFilterRender extends BaseFilterRender{
+public class CartoonFilterRender extends BaseFilterRender {
 
   //rotation matrix
   private final float[] squareVertexDataFilter = {
@@ -84,7 +84,11 @@ public class CartoonFilterRender extends BaseFilterRender{
 
   @Override
   public void release() {
+    GLES20.glDeleteProgram(program);
+  }
 
+  public float getCartoon() {
+    return cartoon;
   }
 
   public void setCartoon(float cartoon) {

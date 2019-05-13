@@ -46,7 +46,7 @@ public final class Handshake {
   public final void readS0(BufferedSource in) throws IOException {
     // Log.d(TAG, "readS0");
     byte s0 = in.readByte();
-    if (s0 != PROTOCOL_VERSION) {
+    if (s0 != PROTOCOL_VERSION && s0 != 72) { //check 72 to fix Ant Media Server
       if (s0 == -1) {
         throw new IOException("InputStream closed");
       } else {

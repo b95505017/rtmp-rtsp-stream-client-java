@@ -15,7 +15,7 @@ import java.nio.ByteOrder;
  */
 
 @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
-public class EdgeDetectionFilterRender extends BaseFilterRender{
+public class EdgeDetectionFilterRender extends BaseFilterRender {
 
   //rotation matrix
   private final float[] squareVertexDataFilter = {
@@ -79,6 +79,6 @@ public class EdgeDetectionFilterRender extends BaseFilterRender{
 
   @Override
   public void release() {
-
+    GLES20.glDeleteProgram(program);
   }
 }

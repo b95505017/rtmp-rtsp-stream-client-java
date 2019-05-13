@@ -14,9 +14,8 @@ import java.nio.ByteOrder;
  * Created by pedro on 3/02/18.
  */
 
-
 @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
-public class SharpnessFilterRender extends BaseFilterRender{
+public class SharpnessFilterRender extends BaseFilterRender {
 
   //rotation matrix
   private final float[] squareVertexDataFilter = {
@@ -88,11 +87,14 @@ public class SharpnessFilterRender extends BaseFilterRender{
 
   @Override
   public void release() {
+    GLES20.glDeleteProgram(program);
+  }
 
+  public float getSharpness() {
+    return sharpness;
   }
 
   /**
-   *
    * @param sharpness between 0 and 1. 0 means no change.
    */
   public void setSharpness(float sharpness) {

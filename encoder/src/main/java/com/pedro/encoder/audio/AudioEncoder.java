@@ -15,6 +15,7 @@ import java.util.List;
 
 /**
  * Created by pedro on 19/01/17.
+ *
  * Encode PCM audio data to ACC and return in a callback
  */
 
@@ -24,13 +25,13 @@ public class AudioEncoder implements GetMicrophoneData {
   private MediaCodec audioEncoder;
   private GetAacData getAacData;
   private MediaCodec.BufferInfo audioInfo = new MediaCodec.BufferInfo();
-  private long mPresentTimeUs;
+  private long presentTimeUs;
   private boolean running;
 
   //default parameters for encoder
   private CodecUtil.Force force = CodecUtil.Force.FIRST_COMPATIBLE_FOUND;
-  private int bitRate = 128 * 1024;  //in kbps
-  private int sampleRate = 44100; //in hz
+  private int bitRate = 64 * 1024;  //in kbps
+  private int sampleRate = 32000; //in hz
   private boolean isStereo = true;
 
   public AudioEncoder(GetAacData getAacData) {
@@ -43,7 +44,6 @@ public class AudioEncoder implements GetMicrophoneData {
   public boolean prepareAudioEncoder(int bitRate, int sampleRate, boolean isStereo) {
     this.sampleRate = sampleRate;
     try {
-
       List<MediaCodecInfo> encoders = new ArrayList<>();
       if (force == CodecUtil.Force.HARDWARE) {
         encoders = CodecUtil.getAllHardwareEncoders(CodecUtil.AAC_MIME);
@@ -52,7 +52,13 @@ public class AudioEncoder implements GetMicrophoneData {
       }
 
       if (force == CodecUtil.Force.FIRST_COMPATIBLE_FOUND) {
-        audioEncoder = MediaCodec.createEncoderByType(CodecUtil.AAC_MIME);
+        MediaCodecInfo encoder = chooseAudioEncoder(CodecUtil.AAC_MIME);
+        if (encoder != null) {
+          audioEncoder = MediaCodec.createByCodecName(encoder.getName());
+        } else {
+          Log.e(TAG, "Valid encoder not found");
+          return false;
+        }
       } else {
         if (encoders.isEmpty()) {
           Log.e(TAG, "Valid encoder not found");
@@ -62,8 +68,8 @@ public class AudioEncoder implements GetMicrophoneData {
         }
       }
 
-      int a = (isStereo) ? 2 : 1;
-      MediaFormat audioFormat = MediaFormat.createAudioFormat(CodecUtil.AAC_MIME, sampleRate, a);
+      int channelCount = (isStereo) ? 2 : 1;
+      MediaFormat audioFormat = MediaFormat.createAudioFormat(CodecUtil.AAC_MIME, sampleRate, channelCount);
       audioFormat.setInteger(MediaFormat.KEY_BIT_RATE, bitRate);
       audioFormat.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 0);
       audioFormat.setInteger(MediaFormat.KEY_AAC_PROFILE,
@@ -71,11 +77,8 @@ public class AudioEncoder implements GetMicrophoneData {
       audioEncoder.configure(audioFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
       running = false;
       return true;
-    } catch (IOException e) {
-      e.printStackTrace();
-      return false;
-    } catch (IllegalStateException e) {
-      e.printStackTrace();
+    } catch (IOException | IllegalStateException e) {
+      Log.e(TAG, "Create AudioEncoder failed.", e);
       return false;
     }
   }
@@ -92,14 +95,10 @@ public class AudioEncoder implements GetMicrophoneData {
   }
 
   public void start() {
-    if (audioEncoder != null) {
-      mPresentTimeUs = System.nanoTime() / 1000;
-      audioEncoder.start();
-      running = true;
-      Log.i(TAG, "AudioEncoder started");
-    } else {
-      Log.e(TAG, "AudioEncoder need be prepared, AudioEncoder not enabled");
-    }
+    presentTimeUs = System.nanoTime() / 1000;
+    audioEncoder.start();
+    running = true;
+    Log.i(TAG, "AudioEncoder started");
   }
 
   public void stop() {
@@ -135,7 +134,7 @@ public class AudioEncoder implements GetMicrophoneData {
     if (inBufferIndex >= 0) {
       ByteBuffer bb = audioEncoder.getInputBuffer(inBufferIndex);
       bb.put(data, 0, size);
-      long pts = System.nanoTime() / 1000 - mPresentTimeUs;
+      long pts = System.nanoTime() / 1000 - presentTimeUs;
       audioEncoder.queueInputBuffer(inBufferIndex, 0, size, pts, 0);
     }
 
@@ -163,7 +162,7 @@ public class AudioEncoder implements GetMicrophoneData {
       ByteBuffer bb = inputBuffers[inBufferIndex];
       bb.clear();
       bb.put(data, 0, size);
-      long pts = System.nanoTime() / 1000 - mPresentTimeUs;
+      long pts = System.nanoTime() / 1000 - presentTimeUs;
       audioEncoder.queueInputBuffer(inBufferIndex, 0, size, pts, 0);
     }
 
@@ -180,6 +179,16 @@ public class AudioEncoder implements GetMicrophoneData {
         break;
       }
     }
+  }
+
+  private MediaCodecInfo chooseAudioEncoder(String mime) {
+    List<MediaCodecInfo> mediaCodecInfoList = CodecUtil.getAllEncoders(mime);
+    for (MediaCodecInfo mediaCodecInfo : mediaCodecInfoList) {
+      String name = mediaCodecInfo.getName().toLowerCase();
+      if (!name.contains("omx.google")) return mediaCodecInfo;
+    }
+    if (mediaCodecInfoList.size() > 0) return mediaCodecInfoList.get(0);
+    else return null;
   }
 
   public void setSampleRate(int sampleRate) {

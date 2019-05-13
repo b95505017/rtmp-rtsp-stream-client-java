@@ -27,8 +27,6 @@ public interface AmfData {
    */
   void readFrom(BufferedSource in) throws IOException;
 
-  /**
-   * @return the amount of bytes required for this object
-   */
+  /** @return the amount of bytes required for this object */
   int getSize();
 }

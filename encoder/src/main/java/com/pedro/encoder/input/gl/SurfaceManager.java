@@ -22,40 +22,32 @@ public class SurfaceManager {
   private static final int EGL_RECORDABLE_ANDROID = 0x3142;
 
   private EGLContext eglContext = null;
-  private EGLContext eglSharedContext = null;
   private EGLSurface eglSurface = null;
   private EGLDisplay eglDisplay = null;
-
-  private Surface surface;
 
   /**
    * Creates an EGL context and an EGL surface.
    */
   public SurfaceManager(Surface surface, SurfaceManager manager) {
-    this.surface = surface;
-    eglSharedContext = manager.eglContext;
-    eglSetup();
+    eglSetup(surface, manager.eglContext);
   }
 
   /**
    * Creates an EGL context and an EGL surface.
    */
   public SurfaceManager(Surface surface, EGLContext eglContext) {
-    this.surface = surface;
-    eglSharedContext = eglContext;
-    eglSetup();
+    eglSetup(surface, eglContext);
   }
 
   /**
    * Creates an EGL context and an EGL surface.
    */
   public SurfaceManager(Surface surface) {
-    this.surface = surface;
-    eglSetup();
+    eglSetup(surface, null);
   }
 
   public SurfaceManager() {
-    eglSetup();
+    eglSetup(null, null);
   }
 
   public void makeCurrent() {
@@ -79,7 +71,7 @@ public class SurfaceManager {
   /**
    * Prepares EGL.  We want a GLES 2.0 context and a surface that supports recording.
    */
-  private void eglSetup() {
+  private void eglSetup(Surface surface, EGLContext eglSharedContext) {
     eglDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY);
     if (eglDisplay == EGL14.EGL_NO_DISPLAY) {
       throw new RuntimeException("unable to get EGL14 display");
@@ -93,9 +85,7 @@ public class SurfaceManager {
     int[] attribList;
     if (eglSharedContext == null) {
       attribList = new int[] {
-          EGL14.EGL_RED_SIZE, 8,
-          EGL14.EGL_GREEN_SIZE, 8,
-          EGL14.EGL_BLUE_SIZE, 8,
+          EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8,
           EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
           /* AA https://stackoverflow.com/questions/27035893/antialiasing-in-opengl-es-2-0 */
           //EGL14.EGL_SAMPLE_BUFFERS, 1 /* true */,
@@ -104,11 +94,8 @@ public class SurfaceManager {
       };
     } else {
       attribList = new int[] {
-          EGL14.EGL_RED_SIZE, 8,
-          EGL14.EGL_GREEN_SIZE, 8,
-          EGL14.EGL_BLUE_SIZE, 8,
-          EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
-          EGL_RECORDABLE_ANDROID, 1,
+          EGL14.EGL_RED_SIZE, 8, EGL14.EGL_GREEN_SIZE, 8, EGL14.EGL_BLUE_SIZE, 8,
+          EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT, EGL_RECORDABLE_ANDROID, 1,
           /* AA https://stackoverflow.com/questions/27035893/antialiasing-in-opengl-es-2-0 */
           //EGL14.EGL_SAMPLE_BUFFERS, 1 /* true */,
           //EGL14.EGL_SAMPLES, 4, /* increase to more smooth limit of your GPU */
@@ -122,24 +109,17 @@ public class SurfaceManager {
 
     // Configure context for OpenGL ES 2.0.
     int[] attrib_list = {
-        EGL14.EGL_CONTEXT_CLIENT_VERSION, 2,
-        EGL14.EGL_NONE
+        EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL14.EGL_NONE
     };
 
-    if (eglSharedContext == null) {
-      eglContext =
-          EGL14.eglCreateContext(eglDisplay, configs[0], EGL14.EGL_NO_CONTEXT, attrib_list, 0);
-    } else {
-      eglContext = EGL14.eglCreateContext(eglDisplay, configs[0], eglSharedContext, attrib_list, 0);
-    }
+    eglContext = EGL14.eglCreateContext(eglDisplay, configs[0],
+        eglSharedContext == null ? EGL14.EGL_NO_CONTEXT : eglSharedContext, attrib_list, 0);
     GlUtil.checkEglError("eglCreateContext");
 
     // Create a window surface, and attach it to the Surface we received.
     if (surface == null) {
       int[] surfaceAttribs = {
-          EGL14.EGL_WIDTH, 1,
-          EGL14.EGL_HEIGHT, 1,
-          EGL14.EGL_NONE
+          EGL14.EGL_WIDTH, 1, EGL14.EGL_HEIGHT, 1, EGL14.EGL_NONE
       };
       eglSurface = EGL14.eglCreatePbufferSurface(eglDisplay, configs[0], surfaceAttribs, 0);
     } else {
@@ -170,10 +150,6 @@ public class SurfaceManager {
 
   public EGLContext getEglContext() {
     return eglContext;
-  }
-
-  public EGLContext getEglSharedContext() {
-    return eglSharedContext;
   }
 
   public EGLSurface getEglSurface() {

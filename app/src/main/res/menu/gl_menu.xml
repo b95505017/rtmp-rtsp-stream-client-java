@@ -6,28 +6,6 @@
       android:title="@string/enable_disable_fxaa"
     />
   <item
-      android:title="@string/stream_object"
-      >
-    <menu>
-      <item
-          android:id="@+id/clear"
-          android:title="@string/clear"
-          />
-      <item
-          android:id="@+id/gif"
-          android:title="@string/gif"
-          />
-      <item
-          android:id="@+id/image"
-          android:title="@string/image"
-          />
-      <item
-          android:id="@+id/text"
-          android:title="@string/text"
-          />
-    </menu>
-  </item>
-  <item
       android:title="@string/filters"
       >
     <menu>
@@ -48,6 +26,10 @@
           android:title="@string/beauty"
           />
       <item
+          android:id="@+id/black"
+          android:title="@string/black"
+          />
+      <item
           android:id="@+id/blur"
           android:title="@string/blur"
           />
@@ -60,8 +42,12 @@
           android:title="@string/cartoon"
           />
       <item
+          android:id="@+id/circle"
+          android:title="@string/circle"
+          />
+      <item
           android:id="@+id/color"
-          android:title="Color"
+          android:title="@string/color"
           />
       <item
           android:id="@+id/contrast"
@@ -92,12 +78,24 @@
           android:title="@string/gamma"
           />
       <item
+          android:id="@+id/glitch"
+          android:title="@string/glitch"
+          />
+      <item
+          android:id="@+id/gif"
+          android:title="@string/gif"
+          />
+      <item
           android:id="@+id/grey_scale"
           android:title="@string/grey_scale"
           />
       <item
           android:id="@+id/halftone_lines"
           android:title="@string/halftone_lines"
+          />
+      <item
+          android:id="@+id/image"
+          android:title="@string/image"
           />
       <item
           android:id="@+id/image_70s"
@@ -128,8 +126,16 @@
           android:title="@string/rainbow"
           />
       <item
+          android:id="@+id/rgb_saturate"
+          android:title="@string/rgb_saturate"
+          />
+      <item
           android:id="@+id/ripple"
           android:title="@string/ripple"
+          />
+      <item
+          android:id="@+id/rotation"
+          android:title="@string/rotation"
           />
       <item
           android:id="@+id/saturation"
@@ -144,8 +150,24 @@
           android:title="@string/sharpness"
           />
       <item
+          android:id="@+id/snow"
+          android:title="@string/snow"
+          />
+      <item
+          android:id="@+id/swirl"
+          android:title="@string/swirl"
+          />
+      <item
+          android:id="@+id/surface_filter"
+          android:title="@string/surface_filter"
+          />
+      <item
           android:id="@+id/temperature"
           android:title="@string/temperature"
+          />
+      <item
+          android:id="@+id/text"
+          android:title="@string/text"
           />
       <item
           android:id="@+id/zebra"

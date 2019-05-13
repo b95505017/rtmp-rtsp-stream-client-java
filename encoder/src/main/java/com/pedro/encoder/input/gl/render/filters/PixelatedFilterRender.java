@@ -15,7 +15,7 @@ import java.nio.ByteOrder;
  */
 
 @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
-public class PixelatedFilterRender extends BaseFilterRender{
+public class PixelatedFilterRender extends BaseFilterRender {
 
   //rotation matrix
   private final float[] squareVertexDataFilter = {
@@ -84,16 +84,23 @@ public class PixelatedFilterRender extends BaseFilterRender{
 
   @Override
   public void release() {
+    GLES20.glDeleteProgram(program);
+  }
 
+  public float getPixelated() {
+    return pixelated;
   }
 
   /**
-   *
    * @param pixelated min value 0.0f, max value 1.0f
    */
   public void setPixelated(float pixelated) {
-    if (pixelated > 1.0f) this.pixelated = 1.0f;
-    else if (pixelated < 0.0f) this.pixelated = 0.0f;
-    else this.pixelated = pixelated;
+    if (pixelated > 1.0f) {
+      this.pixelated = 1.0f;
+    } else if (pixelated < 0.0f) {
+      this.pixelated = 0.0f;
+    } else {
+      this.pixelated = pixelated;
+    }
   }
 }

@@ -1,6 +1,8 @@
 package net.ossrs.rtmp;
 
 import android.media.MediaCodec;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Process;
 import android.util.Log;
 import com.github.faucamp.simplertmp.DefaultRtmpPublisher;
@@ -8,6 +10,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by winlin on 5/2/15.
@@ -57,11 +60,22 @@ public class SrsFlvMuxer {
   private SrsFlvFrame mAudioSequenceHeader;
   private SrsAllocator mVideoAllocator = new SrsAllocator(VIDEO_ALLOC_SIZE);
   private SrsAllocator mAudioAllocator = new SrsAllocator(AUDIO_ALLOC_SIZE);
-  private BlockingQueue<SrsFlvFrame> mFlvTagCache = new LinkedBlockingQueue<>(30);
+  private volatile BlockingQueue<SrsFlvFrame> mFlvTagCache = new LinkedBlockingQueue<>(30);
   private ConnectCheckerRtmp connectCheckerRtmp;
-  private int sampleRate = 44100;
+  private int sampleRate = 0;
   private boolean isPpsSpsSend = false;
   private byte profileIop = ProfileIop.BASELINE;
+  private String url;
+  //re connection
+  private int numRetry;
+  private int reTries;
+  private Handler handler;
+  private Runnable runnable;
+
+  private long mAudioFramesSent = 0;
+  private long mVideoFramesSent = 0;
+  private long mDroppedAudioFrames = 0;
+  private long mDroppedVideoFrames = 0;
 
   /**
    * constructor.
@@ -69,10 +83,10 @@ public class SrsFlvMuxer {
   public SrsFlvMuxer(ConnectCheckerRtmp connectCheckerRtmp) {
     this.connectCheckerRtmp = connectCheckerRtmp;
     publisher = new DefaultRtmpPublisher(connectCheckerRtmp);
+    handler = new Handler(Looper.getMainLooper());
   }
 
-  public void setProfileIop(byte profileIop)
-  {
+  public void setProfileIop(byte profileIop) {
     this.profileIop = profileIop;
   }
 
@@ -93,6 +107,56 @@ public class SrsFlvMuxer {
     publisher.setAuthorization(user, password);
   }
 
+  public boolean isConnected() {
+    return connected;
+  }
+
+  public void resizeFlvTagCache(int newSize) {
+    if (newSize < mFlvTagCache.size() - mFlvTagCache.remainingCapacity()) {
+      throw new RuntimeException("Can't fit current cache inside new cache size");
+    }
+
+    BlockingQueue<SrsFlvFrame> tempQueue = new LinkedBlockingQueue<>(newSize);
+    mFlvTagCache.drainTo(tempQueue);
+    mFlvTagCache = tempQueue;
+  }
+
+  public int getFlvTagCacheSize() {
+    return mFlvTagCache.size();
+  }
+
+  public long getSentAudioFrames() {
+    return mAudioFramesSent;
+  }
+
+  public long getSentVideoFrames() {
+    return mVideoFramesSent;
+  }
+
+  public long getDroppedAudioFrames() {
+    return mDroppedAudioFrames;
+  }
+
+  public long getDroppedVideoFrames() {
+    return mDroppedVideoFrames;
+  }
+
+  public void resetSentAudioFrames() {
+    mAudioFramesSent = 0;
+  }
+
+  public void resetSentVideoFrames() {
+    mVideoFramesSent = 0;
+  }
+
+  public void resetDroppedAudioFrames() {
+    mDroppedAudioFrames = 0;
+  }
+
+  public void resetDroppedVideoFrames() {
+    mDroppedVideoFrames = 0;
+  }
+
   /**
    * set video resolution for publisher
    *
@@ -100,9 +164,7 @@ public class SrsFlvMuxer {
    * @param height height
    */
   public void setVideoResolution(int width, int height) {
-    if (publisher != null) {
-      publisher.setVideoResolution(width, height);
-    }
+    publisher.setVideoResolution(width, height);
   }
 
   private void disconnect(ConnectCheckerRtmp connectChecker) {
@@ -114,11 +176,43 @@ public class SrsFlvMuxer {
     connected = false;
     mVideoSequenceHeader = null;
     mAudioSequenceHeader = null;
-    connectChecker.onDisconnectRtmp();
+
+    resetSentAudioFrames();
+    resetSentVideoFrames();
+    resetDroppedAudioFrames();
+    resetDroppedVideoFrames();
+
+    if (connectChecker != null) {
+      reTries = 0;
+      connectChecker.onDisconnectRtmp();
+    }
     Log.i(TAG, "worker: disconnect ok.");
   }
 
+  public void setReTries(int reTries) {
+    numRetry = reTries;
+    this.reTries = reTries;
+  }
+
+  public boolean shouldRetry(String reason) {
+    boolean validReason = !reason.contains("Endpoint malformed");
+    return validReason && reTries > 0;
+  }
+
+  public void reConnect(final long delay) {
+    reTries--;
+    stop(null);
+    runnable = new Runnable() {
+      @Override
+      public void run() {
+        start(url);
+      }
+    };
+    handler.postDelayed(runnable, delay);
+  }
+
   private boolean connect(String url) {
+    this.url = url;
     if (!connected) {
       Log.i(TAG, String.format("worker: connecting to RTMP server by url=%s\n", url));
       if (publisher.connect(url)) {
@@ -143,9 +237,11 @@ public class SrsFlvMuxer {
       }
       publisher.publishVideoData(frame.flvTag.array(), frame.flvTag.size(), frame.dts);
       mVideoAllocator.release(frame.flvTag);
+      mVideoFramesSent++;
     } else if (frame.is_audio()) {
       publisher.publishAudioData(frame.flvTag.array(), frame.flvTag.size(), frame.dts);
       mAudioAllocator.release(frame.flvTag);
+      mAudioFramesSent++;
     }
   }
 
@@ -160,10 +256,16 @@ public class SrsFlvMuxer {
         if (!connect(rtmpUrl)) {
           return;
         }
+        reTries = numRetry;
         connectCheckerRtmp.onConnectionSuccessRtmp();
         while (!Thread.interrupted()) {
           try {
-            SrsFlvFrame frame = mFlvTagCache.take();
+            SrsFlvFrame frame = mFlvTagCache.poll(1, TimeUnit.SECONDS);
+            if (frame == null) {
+              Log.i(TAG, "Skipping iteration, frame null");
+              continue;
+            }
+
             if (frame.is_sequenceHeader()) {
               if (frame.is_video()) {
                 mVideoSequenceHeader = frame;
@@ -188,14 +290,19 @@ public class SrsFlvMuxer {
     worker.start();
   }
 
+  public void stop() {
+    stop(connectCheckerRtmp);
+  }
+
   /**
    * stop the muxer, disconnect RTMP connection.
    */
-  public void stop() {
+  private void stop(final ConnectCheckerRtmp connectCheckerRtmp) {
+    handler.removeCallbacks(runnable);
     if (worker != null) {
       worker.interrupt();
       try {
-        worker.join(1000);
+        worker.join(100);
       } catch (InterruptedException e) {
         worker.interrupt();
       }
@@ -629,7 +736,7 @@ public class SrsFlvMuxer {
     private ByteBuffer Sps;
     private ByteBuffer Pps;
     private boolean aac_specific_config_got;
-    private int achannel = 2;
+    private int achannel;
 
     public SrsFlv() {
       reset();
@@ -656,7 +763,8 @@ public class SrsFlvMuxer {
         // AudioSpecificConfig (), page 33
         // 1.6.2.1 AudioSpecificConfig
         // audioObjectType; 5 bslbf
-        byte ch = (byte) (bb.get(0) & 0xf8);
+        byte ch = (byte) (bi.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG ? bb.get(0) & 0xf8
+            : (bb.get(0) & 0xf8) / 2);
         // 3bits left.
 
         // samplingFrequencyIndex; 4 bslbf
@@ -724,7 +832,6 @@ public class SrsFlvMuxer {
 
       audio_tag.put(audio_header, 0);
       audio_tag.put(aac_packet_type, 1);
-
       writeRtmpPacket(SrsCodecFlvTag.Audio, dts, 0, aac_packet_type, audio_tag);
     }
 
@@ -767,6 +874,7 @@ public class SrsFlvMuxer {
     public void writeVideoSample(final ByteBuffer bb, MediaCodec.BufferInfo bi) {
       if (bi.size < 4) return;
 
+      bb.rewind();  //Sometimes the position is not 0.
       int pts = (int) (bi.presentationTimeUs / 1000);
       int type = SrsCodecVideoAVCFrame.InterFrame;
       SrsFlvFrameBytes frame = avc.demuxAnnexb(bb, bi.size, true);
@@ -855,7 +963,6 @@ public class SrsFlvMuxer {
       frame.dts = dts;
       frame.frame_type = frame_type;
       frame.avc_aac_type = avc_aac_type;
-
       if (frame.is_video()) {
         if (needToFindKeyFrame) {
           if (frame.is_keyframe()) {
@@ -875,6 +982,11 @@ public class SrsFlvMuxer {
         mFlvTagCache.add(frame);
       } catch (IllegalStateException e) {
         Log.i(TAG, "frame discarded");
+        if (frame.is_video()) {
+          mDroppedVideoFrames++;
+        } else {
+          mDroppedAudioFrames++;
+        }
       }
     }
   }

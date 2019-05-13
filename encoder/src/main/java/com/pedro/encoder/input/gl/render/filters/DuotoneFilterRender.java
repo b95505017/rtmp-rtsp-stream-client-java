@@ -99,7 +99,31 @@ public class DuotoneFilterRender extends BaseFilterRender {
 
   @Override
   public void release() {
+    GLES20.glDeleteProgram(program);
+  }
 
+  public float getRed() {
+    return red;
+  }
+
+  public float getGreen() {
+    return green;
+  }
+
+  public float getBlue() {
+    return blue;
+  }
+
+  public float getRed2() {
+    return red2;
+  }
+
+  public float getGreen2() {
+    return green2;
+  }
+
+  public float getBlue2() {
+    return blue2;
   }
 
   /**

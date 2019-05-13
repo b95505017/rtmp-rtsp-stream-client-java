@@ -24,25 +24,25 @@ public abstract class BaseRenderOffScreen {
   protected float[] MVPMatrix = new float[16];
   protected float[] STMatrix = new float[16];
 
-  protected final int[] fboId = new int[] { 0 };
-  private final int[] rboId = new int[] { 0 };
-  private final int[] texId = new int[] { 0 };
+  protected RenderHandler renderHandler = new RenderHandler();
 
   protected int width;
   protected int height;
 
-  public abstract void initGl(int width, int height, Context context);
+  public abstract void initGl(int width, int height, Context context, int previewWidth,
+      int previewHeight);
 
   public abstract void draw();
 
   public abstract void release();
 
   public int getTexId() {
-    return texId[0];
+    return renderHandler.getTexId()[0];
   }
 
   protected void initFBO(int width, int height) {
-    initFBO(width, height, fboId, rboId, texId);
+    initFBO(width, height, renderHandler.getFboId(), renderHandler.getRboId(),
+        renderHandler.getTexId());
   }
 
   protected void initFBO(int width, int height, int[] fboId, int[] rboId, int[] texId) {
@@ -72,7 +72,7 @@ public abstract class BaseRenderOffScreen {
         GLES20.GL_TEXTURE_2D, texId[0], 0);
 
     int status = GLES20.glCheckFramebufferStatus(GLES20.GL_FRAMEBUFFER);
-    if (status != GLES20.GL_FRAMEBUFFER_COMPLETE){
+    if (status != GLES20.GL_FRAMEBUFFER_COMPLETE) {
       throw new RuntimeException("FrameBuffer uncompleted code: " + status);
     }
     GlUtil.checkGlError("initFBO_E");

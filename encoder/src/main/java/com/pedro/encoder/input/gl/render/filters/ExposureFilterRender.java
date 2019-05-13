@@ -15,7 +15,7 @@ import java.nio.ByteOrder;
  */
 
 @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
-public class ExposureFilterRender extends BaseFilterRender{
+public class ExposureFilterRender extends BaseFilterRender {
 
   //rotation matrix
   private final float[] squareVertexDataFilter = {
@@ -84,7 +84,11 @@ public class ExposureFilterRender extends BaseFilterRender{
 
   @Override
   public void release() {
+    GLES20.glDeleteProgram(program);
+  }
 
+  public float getExposure() {
+    return exposure;
   }
 
   public void setExposure(float exposure) {

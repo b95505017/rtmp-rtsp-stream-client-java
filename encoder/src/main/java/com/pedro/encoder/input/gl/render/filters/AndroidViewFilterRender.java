@@ -79,7 +79,7 @@ public class AndroidViewFilterRender extends BaseFilterRender {
 
   @Override
   protected void drawFilter() {
-    surfaceTexture.setDefaultBufferSize(getWidth(), getHeight());
+    surfaceTexture.setDefaultBufferSize(getPreviewWidth(), getPreviewHeight());
     if (view != null) {
       mainHandler.post(new Runnable() {
         @Override
@@ -119,7 +119,11 @@ public class AndroidViewFilterRender extends BaseFilterRender {
 
   @Override
   public void release() {
+    GLES20.glDeleteProgram(program);
+  }
 
+  public View getView() {
+    return view;
   }
 
   public void setView(final View view) {

@@ -1,5 +1,6 @@
 package com.pedro.rtplibrary.rtmp;
 
+import android.content.Context;
 import android.media.MediaCodec;
 import android.os.Build;
 import android.support.annotation.RequiresApi;
@@ -45,6 +46,12 @@ public class RtmpCamera1 extends Camera1Base {
     srsFlvMuxer = new SrsFlvMuxer(connectChecker);
   }
 
+  @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
+  public RtmpCamera1(Context context, ConnectCheckerRtmp connectChecker) {
+    super(context);
+    srsFlvMuxer = new SrsFlvMuxer(connectChecker);
+  }
+
   /**
    * H264 profile.
    *
@@ -52,6 +59,56 @@ public class RtmpCamera1 extends Camera1Base {
    */
   public void setProfileIop(byte profileIop) {
     srsFlvMuxer.setProfileIop(profileIop);
+  }
+
+  @Override
+  public void resizeCache(int newSize) throws RuntimeException {
+    srsFlvMuxer.resizeFlvTagCache(newSize);
+  }
+
+  @Override
+  public int getCacheSize() {
+    return srsFlvMuxer.getFlvTagCacheSize();
+  }
+
+  @Override
+  public long getSentAudioFrames() {
+    return srsFlvMuxer.getSentAudioFrames();
+  }
+
+  @Override
+  public long getSentVideoFrames() {
+    return srsFlvMuxer.getSentVideoFrames();
+  }
+
+  @Override
+  public long getDroppedAudioFrames() {
+    return srsFlvMuxer.getDroppedAudioFrames();
+  }
+
+  @Override
+  public long getDroppedVideoFrames() {
+    return srsFlvMuxer.getDroppedVideoFrames();
+  }
+
+  @Override
+  public void resetSentAudioFrames() {
+    srsFlvMuxer.resetSentAudioFrames();
+  }
+
+  @Override
+  public void resetSentVideoFrames() {
+    srsFlvMuxer.resetSentVideoFrames();
+  }
+
+  @Override
+  public void resetDroppedAudioFrames() {
+    srsFlvMuxer.resetDroppedAudioFrames();
+  }
+
+  @Override
+  public void resetDroppedVideoFrames() {
+    srsFlvMuxer.resetDroppedVideoFrames();
   }
 
   @Override
@@ -81,12 +138,27 @@ public class RtmpCamera1 extends Camera1Base {
   }
 
   @Override
+  public void setReTries(int reTries) {
+    srsFlvMuxer.setReTries(reTries);
+  }
+
+  @Override
+  public boolean shouldRetry(String reason) {
+    return srsFlvMuxer.shouldRetry(reason);
+  }
+
+  @Override
+  public void reConnect(long delay) {
+    srsFlvMuxer.reConnect(delay);
+  }
+
+  @Override
   protected void getAacDataRtp(ByteBuffer aacBuffer, MediaCodec.BufferInfo info) {
     srsFlvMuxer.sendAudio(aacBuffer, info);
   }
 
   @Override
-  protected void onSPSandPPSRtp(ByteBuffer sps, ByteBuffer pps) {
+  protected void onSpsPpsVpsRtp(ByteBuffer sps, ByteBuffer pps, ByteBuffer vps) {
     srsFlvMuxer.setSpsPPs(sps, pps);
   }
 

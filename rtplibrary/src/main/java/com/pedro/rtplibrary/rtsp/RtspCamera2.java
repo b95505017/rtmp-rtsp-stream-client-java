@@ -7,11 +7,13 @@ import android.support.annotation.RequiresApi;
 import android.view.SurfaceView;
 import android.view.TextureView;
 
+import com.pedro.encoder.utils.CodecUtil;
 import com.pedro.rtplibrary.base.Camera2Base;
 import com.pedro.rtplibrary.view.LightOpenGlView;
 import com.pedro.rtplibrary.view.OpenGlView;
 import com.pedro.rtsp.rtsp.Protocol;
 import com.pedro.rtsp.rtsp.RtspClient;
+import com.pedro.rtsp.rtsp.VideoCodec;
 import com.pedro.rtsp.utils.ConnectCheckerRtsp;
 
 import java.nio.ByteBuffer;
@@ -47,8 +49,8 @@ public class RtspCamera2 extends Camera2Base {
     rtspClient = new RtspClient(connectCheckerRtsp);
   }
 
-  public RtspCamera2(Context context, ConnectCheckerRtsp connectCheckerRtsp) {
-    super(context);
+  public RtspCamera2(Context context, boolean useOpengl, ConnectCheckerRtsp connectCheckerRtsp) {
+    super(context, useOpengl);
     rtspClient = new RtspClient(connectCheckerRtsp);
   }
 
@@ -59,6 +61,60 @@ public class RtspCamera2 extends Camera2Base {
    */
   public void setProtocol(Protocol protocol) {
     rtspClient.setProtocol(protocol);
+  }
+
+  @Override
+  public void resizeCache(int newSize) throws RuntimeException {
+    rtspClient.resizeCache(newSize);
+  }
+
+  @Override
+  public int getCacheSize() {
+    return rtspClient.getCacheSize();
+  }
+
+  @Override
+  public long getSentAudioFrames() {
+    return rtspClient.getSentAudioFrames();
+  }
+
+  @Override
+  public long getSentVideoFrames() {
+    return rtspClient.getSentVideoFrames();
+  }
+
+  @Override
+  public long getDroppedAudioFrames() {
+    return rtspClient.getDroppedAudioFrames();
+  }
+
+  @Override
+  public long getDroppedVideoFrames() {
+    return rtspClient.getDroppedVideoFrames();
+  }
+
+  @Override
+  public void resetSentAudioFrames() {
+    rtspClient.resetSentAudioFrames();
+  }
+
+  @Override
+  public void resetSentVideoFrames() {
+    rtspClient.resetSentVideoFrames();
+  }
+
+  @Override
+  public void resetDroppedAudioFrames() {
+    rtspClient.resetDroppedAudioFrames();
+  }
+
+  @Override
+  public void resetDroppedVideoFrames() {
+    rtspClient.resetDroppedVideoFrames();
+  }
+
+  public void setVideoCodec(VideoCodec videoCodec) {
+    videoEncoder.setType(videoCodec == VideoCodec.H265 ? CodecUtil.H265_MIME : CodecUtil.H264_MIME);
   }
 
   @Override
@@ -75,9 +131,6 @@ public class RtspCamera2 extends Camera2Base {
   @Override
   protected void startStreamRtp(String url) {
     rtspClient.setUrl(url);
-    if (!cameraManager.isPrepared()) {
-      rtspClient.connect();
-    }
   }
 
   @Override
@@ -86,15 +139,31 @@ public class RtspCamera2 extends Camera2Base {
   }
 
   @Override
+  public void setReTries(int reTries) {
+    rtspClient.setReTries(reTries);
+  }
+
+  @Override
+  public boolean shouldRetry(String reason) {
+    return rtspClient.shouldRetry(reason);
+  }
+
+  @Override
+  public void reConnect(long delay) {
+    rtspClient.reConnect(delay);
+  }
+
+  @Override
   protected void getAacDataRtp(ByteBuffer aacBuffer, MediaCodec.BufferInfo info) {
     rtspClient.sendAudio(aacBuffer, info);
   }
 
   @Override
-  protected void onSPSandPPSRtp(ByteBuffer sps, ByteBuffer pps) {
+  protected void onSpsPpsVpsRtp(ByteBuffer sps, ByteBuffer pps, ByteBuffer vps) {
     ByteBuffer newSps = sps.duplicate();
     ByteBuffer newPps = pps.duplicate();
-    rtspClient.setSPSandPPS(newSps, newPps);
+    ByteBuffer newVps = vps != null ? vps.duplicate() : null;
+    rtspClient.setSPSandPPS(newSps, newPps, newVps);
     rtspClient.connect();
   }
 

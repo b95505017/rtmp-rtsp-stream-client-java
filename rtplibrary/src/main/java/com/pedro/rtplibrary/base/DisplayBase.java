@@ -2,13 +2,14 @@ package com.pedro.rtplibrary.base;
 
 import android.content.Context;
 import android.content.Intent;
+import android.hardware.display.VirtualDisplay;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
-import android.media.MediaMuxer;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.support.annotation.RequiresApi;
+import android.view.Surface;
 import android.view.SurfaceView;
 import com.pedro.encoder.audio.AudioEncoder;
 import com.pedro.encoder.audio.GetAacData;
@@ -16,8 +17,10 @@ import com.pedro.encoder.input.audio.GetMicrophoneData;
 import com.pedro.encoder.input.audio.MicrophoneManager;
 import com.pedro.encoder.utils.CodecUtil;
 import com.pedro.encoder.video.FormatVideoEncoder;
-import com.pedro.encoder.video.GetH264Data;
+import com.pedro.encoder.video.GetVideoData;
 import com.pedro.encoder.video.VideoEncoder;
+import com.pedro.rtplibrary.view.GlInterface;
+import com.pedro.rtplibrary.view.OffScreenGlThread;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -33,35 +36,37 @@ import static android.content.Context.MEDIA_PROJECTION_SERVICE;
  * Created by pedro on 9/08/17.
  */
 @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
-public abstract class DisplayBase implements GetAacData, GetH264Data, GetMicrophoneData {
+public abstract class DisplayBase implements GetAacData, GetVideoData, GetMicrophoneData {
 
+  private OffScreenGlThread glInterface;
   protected Context context;
   private MediaProjection mediaProjection;
   private MediaProjectionManager mediaProjectionManager;
   protected VideoEncoder videoEncoder;
-  protected MicrophoneManager microphoneManager;
-  protected AudioEncoder audioEncoder;
+  private MicrophoneManager microphoneManager;
+  private AudioEncoder audioEncoder;
   private boolean streaming = false;
   protected SurfaceView surfaceView;
   private boolean videoEnabled = true;
-  //record
-  private MediaMuxer mediaMuxer;
-  private int videoTrack = -1;
-  private int audioTrack = -1;
-  private boolean recording = false;
-  private boolean canRecord = false;
-  private MediaFormat videoFormat;
-  private MediaFormat audioFormat;
   private int dpi = 320;
+  private VirtualDisplay virtualDisplay;
+  private int resultCode = -1;
+  private Intent data;
+  private RecordController recordController;
 
-  public DisplayBase(Context context) {
+  public DisplayBase(Context context, boolean useOpengl) {
     this.context = context;
+    if (useOpengl) {
+      glInterface = new OffScreenGlThread(context);
+      glInterface.init();
+    }
     mediaProjectionManager =
         ((MediaProjectionManager) context.getSystemService(MEDIA_PROJECTION_SERVICE));
     this.surfaceView = null;
     videoEncoder = new VideoEncoder(this);
     microphoneManager = new MicrophoneManager(this);
     audioEncoder = new AudioEncoder(this);
+    recordController = new RecordController();
   }
 
   /**
@@ -89,8 +94,15 @@ public abstract class DisplayBase implements GetAacData, GetH264Data, GetMicroph
    */
   public boolean prepareVideo(int width, int height, int fps, int bitrate, int rotation, int dpi) {
     this.dpi = dpi;
-    return videoEncoder.prepareVideoEncoder(width, height, fps, bitrate, rotation, true, 2,
-        FormatVideoEncoder.SURFACE);
+    boolean result =
+        videoEncoder.prepareVideoEncoder(width, height, fps, bitrate, rotation, true, 2,
+            FormatVideoEncoder.SURFACE);
+    if (glInterface != null) {
+      glInterface = new OffScreenGlThread(context);
+      glInterface.init();
+      glInterface.setEncoderSize(videoEncoder.getWidth(), videoEncoder.getHeight());
+    }
+    return result;
   }
 
   protected abstract void prepareAudioRtp(boolean isStereo, int sampleRate);
@@ -124,20 +136,18 @@ public abstract class DisplayBase implements GetAacData, GetH264Data, GetMicroph
    * doesn't support any configuration seated or your device hasn't a H264 encoder).
    */
   public boolean prepareVideo() {
-    return videoEncoder.prepareVideoEncoder(640, 480, 30, 1200 * 1024, 0, true, 2,
-        FormatVideoEncoder.SURFACE);
+    return prepareVideo(640, 480, 30, 1200 * 1024, 0, 320);
   }
 
   /**
    * Same to call:
-   * prepareAudio(128 * 1024, 44100, true, false, false);
+   * prepareAudio(64 * 1024, 32000, true, false, false);
    *
    * @return true if success, false if you get a error (Normally because the encoder selected
    * doesn't support any configuration seated or your device hasn't a AAC encoder).
    */
   public boolean prepareAudio() {
-    microphoneManager.createMicrophone();
-    return audioEncoder.prepareAudioEncoder();
+    return prepareAudio(64 * 1024, 32000, true, false, false);
   }
 
   /**
@@ -155,34 +165,25 @@ public abstract class DisplayBase implements GetAacData, GetH264Data, GetMicroph
    * @param path where file will be saved.
    * @throws IOException If you init it before start stream.
    */
-  public void startRecord(String path) throws IOException {
-    if (streaming) {
-      mediaMuxer = new MediaMuxer(path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
-      videoTrack = mediaMuxer.addTrack(videoFormat);
-      audioTrack = mediaMuxer.addTrack(audioFormat);
-      mediaMuxer.start();
-      recording = true;
-      if (videoEncoder.isRunning()) videoEncoder.reset();
-    } else {
-      throw new IOException("Need be called while stream");
+  public void startRecord(String path, RecordController.Listener listener) throws IOException {
+    recordController.startRecord(path, listener);
+    if (!streaming) {
+      startEncoders(resultCode, data);
+    } else if (videoEncoder.isRunning()) {
+      resetVideoEncoder();
     }
+  }
+
+  public void startRecord(final String path) throws IOException {
+    startRecord(path, null);
   }
 
   /**
    * Stop record MP4 video started with @startRecord. If you don't call it file will be unreadable.
    */
   public void stopRecord() {
-    recording = false;
-    if (mediaMuxer != null) {
-      if (canRecord) {
-        mediaMuxer.stop();
-        mediaMuxer.release();
-        canRecord = false;
-      }
-      mediaMuxer = null;
-    }
-    videoTrack = -1;
-    audioTrack = -1;
+    recordController.stopRecord();
+    if (!streaming) stopStream();
   }
 
   protected abstract void startStreamRtp(String url);
@@ -196,6 +197,11 @@ public abstract class DisplayBase implements GetAacData, GetH264Data, GetMicroph
     return mediaProjectionManager.createScreenCaptureIntent();
   }
 
+  public void setIntentResult(int resultCode, Intent data) {
+    this.resultCode = resultCode;
+    this.data = data;
+  }
+
   /**
    * Need be called after @prepareVideo or/and @prepareAudio.
    *
@@ -207,15 +213,46 @@ public abstract class DisplayBase implements GetAacData, GetH264Data, GetMicroph
    * RTMP: rtmp://192.168.1.1:1935/live/pedroSG94
    * RTMPS: rtmps://192.168.1.1:1935/live/pedroSG94
    */
-  public void startStream(String url, int resultCode, Intent data) {
+  public void startStream(String url) {
+    streaming = true;
+    if (!recordController.isRecording()) {
+      startEncoders(resultCode, data);
+    } else {
+      resetVideoEncoder();
+    }
+    startStreamRtp(url);
+  }
+
+  private void startEncoders(int resultCode, Intent data) {
+    if (data == null) {
+      throw new RuntimeException("You need send intent data before startRecord or startStream");
+    }
     videoEncoder.start();
     audioEncoder.start();
+    if (glInterface != null) {
+      glInterface.setFps(videoEncoder.getFps());
+      glInterface.start();
+      glInterface.addMediaCodecSurface(videoEncoder.getInputSurface());
+    }
+    Surface surface =
+        (glInterface != null) ? glInterface.getSurface() : videoEncoder.getInputSurface();
     mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data);
-    mediaProjection.createVirtualDisplay("Stream Display", videoEncoder.getWidth(),
-        videoEncoder.getHeight(), dpi, 0, videoEncoder.getInputSurface(), null, null);
+    virtualDisplay = mediaProjection.createVirtualDisplay("Stream Display", videoEncoder.getWidth(),
+        videoEncoder.getHeight(), dpi, 0, surface, null, null);
     microphoneManager.start();
-    streaming = true;
-    startStreamRtp(url);
+  }
+
+  private void resetVideoEncoder() {
+    virtualDisplay.setSurface(null);
+    if (glInterface != null) {
+      glInterface.removeMediaCodecSurface();
+    }
+    videoEncoder.reset();
+    if (glInterface != null) {
+      glInterface.addMediaCodecSurface(videoEncoder.getInputSurface());
+    }
+    virtualDisplay.setSurface(
+        glInterface != null ? glInterface.getSurface() : videoEncoder.getInputSurface());
   }
 
   protected abstract void stopStreamRtp();
@@ -224,14 +261,60 @@ public abstract class DisplayBase implements GetAacData, GetH264Data, GetMicroph
    * Stop stream started with @startStream.
    */
   public void stopStream() {
-    microphoneManager.stop();
-    if (mediaProjection != null) {
-      mediaProjection.stop();
+    if (streaming) {
+      streaming = false;
+      stopStreamRtp();
     }
-    stopStreamRtp();
-    videoEncoder.stop();
-    audioEncoder.stop();
-    streaming = false;
+    if (!recordController.isRecording()) {
+      microphoneManager.stop();
+      if (mediaProjection != null) {
+        mediaProjection.stop();
+      }
+      if (glInterface != null) {
+        glInterface.removeMediaCodecSurface();
+        glInterface.stop();
+      }
+      videoEncoder.stop();
+      audioEncoder.stop();
+      data = null;
+      recordController.resetFormats();
+    }
+  }
+
+  //re connection
+  public abstract void setReTries(int reTries);
+
+  public abstract boolean shouldRetry(String reason);
+
+  protected abstract void reConnect(long delay);
+
+  //cache control
+  public abstract void resizeCache(int newSize) throws RuntimeException;
+
+  public abstract int getCacheSize();
+
+  public abstract long getSentAudioFrames();
+
+  public abstract long getSentVideoFrames();
+
+  public abstract long getDroppedAudioFrames();
+
+  public abstract long getDroppedVideoFrames();
+
+  public abstract void resetSentAudioFrames();
+
+  public abstract void resetSentVideoFrames();
+
+  public abstract void resetDroppedAudioFrames();
+
+  public abstract void resetDroppedVideoFrames();
+
+  public GlInterface getGlInterface() {
+    if (glInterface != null) {
+      return glInterface;
+    } else {
+      throw new RuntimeException("You can't do it. You are not using Opengl");
+    }
   }
 
   /**
@@ -283,15 +366,39 @@ public abstract class DisplayBase implements GetAacData, GetH264Data, GetMicroph
     videoEnabled = true;
   }
 
+  public int getBitrate() {
+    return videoEncoder.getBitRate();
+  }
+
+  public int getResolutionValue() {
+    return videoEncoder.getWidth() * videoEncoder.getHeight();
+  }
+
+  public int getStreamWidth() {
+    return videoEncoder.getWidth();
+  }
+
+  public int getStreamHeight() {
+    return videoEncoder.getHeight();
+  }
+
   /**
-   * Se video bitrate of H264 in kb while stream.
+   * Set video bitrate of H264 in kb while stream.
    *
    * @param bitrate H264 in kb.
    */
   public void setVideoBitrateOnFly(int bitrate) {
-    if (Build.VERSION.SDK_INT >= 19) {
-      videoEncoder.setVideoBitrateOnFly(bitrate);
-    }
+    videoEncoder.setVideoBitrateOnFly(bitrate);
+  }
+
+  /**
+   * Set limit FPS while stream. This will be override when you call to prepareVideo method.
+   * This could produce a change in iFrameInterval.
+   *
+   * @param fps frames per second
+   */
+  public void setLimitFPSOnFly(int fps) {
+    videoEncoder.setFps(fps);
   }
 
   /**
@@ -309,37 +416,47 @@ public abstract class DisplayBase implements GetAacData, GetH264Data, GetMicroph
    * @return true if recording, false if not recoding.
    */
   public boolean isRecording() {
-    return recording;
+    return recordController.isRecording();
+  }
+
+  public void pauseRecord() {
+    recordController.pauseRecord();
+  }
+
+  public void resumeRecord() {
+    recordController.resumeRecord();
+  }
+
+  public RecordController.Status getRecordStatus() {
+    return recordController.getStatus();
   }
 
   protected abstract void getAacDataRtp(ByteBuffer aacBuffer, MediaCodec.BufferInfo info);
 
   @Override
   public void getAacData(ByteBuffer aacBuffer, MediaCodec.BufferInfo info) {
-    if (recording && canRecord) {
-      mediaMuxer.writeSampleData(audioTrack, aacBuffer, info);
-    }
-    getAacDataRtp(aacBuffer, info);
+    recordController.recordAudio(aacBuffer, info);
+    if (streaming) getAacDataRtp(aacBuffer, info);
   }
 
-  protected abstract void onSPSandPPSRtp(ByteBuffer sps, ByteBuffer pps);
+  protected abstract void onSpsPpsVpsRtp(ByteBuffer sps, ByteBuffer pps, ByteBuffer vps);
 
   @Override
-  public void onSPSandPPS(ByteBuffer sps, ByteBuffer pps) {
-    onSPSandPPSRtp(sps, pps);
+  public void onSpsPps(ByteBuffer sps, ByteBuffer pps) {
+    if (streaming) onSpsPpsVpsRtp(sps, pps, null);
+  }
+
+  @Override
+  public void onSpsPpsVps(ByteBuffer sps, ByteBuffer pps, ByteBuffer vps) {
+    if (streaming) onSpsPpsVpsRtp(sps, pps, vps);
   }
 
   protected abstract void getH264DataRtp(ByteBuffer h264Buffer, MediaCodec.BufferInfo info);
 
   @Override
-  public void getH264Data(ByteBuffer h264Buffer, MediaCodec.BufferInfo info) {
-    if (recording) {
-      if (info.flags == MediaCodec.BUFFER_FLAG_KEY_FRAME) canRecord = true;
-      if (canRecord) {
-        mediaMuxer.writeSampleData(videoTrack, h264Buffer, info);
-      }
-    }
-    getH264DataRtp(h264Buffer, info);
+  public void getVideoData(ByteBuffer h264Buffer, MediaCodec.BufferInfo info) {
+    recordController.recordVideo(h264Buffer, info);
+    if (streaming) getH264DataRtp(h264Buffer, info);
   }
 
   @Override
@@ -349,12 +466,12 @@ public abstract class DisplayBase implements GetAacData, GetH264Data, GetMicroph
 
   @Override
   public void onVideoFormat(MediaFormat mediaFormat) {
-    videoFormat = mediaFormat;
+    recordController.setVideoFormat(mediaFormat);
   }
 
   @Override
   public void onAudioFormat(MediaFormat mediaFormat) {
-    audioFormat = mediaFormat;
+    recordController.setAudioFormat(mediaFormat);
   }
 }
 
