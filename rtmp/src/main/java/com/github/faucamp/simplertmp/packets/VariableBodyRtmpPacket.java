@@ -17,63 +17,63 @@ import okio.BufferedSource;
 /**
  * RTMP packet with a "variable" body structure (i.e. the structure of the
  * body depends on some other state/parameter in the packet.
- * 
+ * <p>
  * Examples of this type of packet are Command and Data; this abstract class
  * exists mostly for code re-use.
- * 
+ *
  * @author francois, yuhsuan.lin
  */
 public abstract class VariableBodyRtmpPacket extends RtmpPacket {
 
-    protected List<AmfData> data;
+  protected List<AmfData> data;
 
-    public VariableBodyRtmpPacket(RtmpHeader header) {
-        super(header);
-    }
+  public VariableBodyRtmpPacket(RtmpHeader header) {
+    super(header);
+  }
 
-    public List<AmfData> getData() {
-        return data;
-    }
+  public List<AmfData> getData() {
+    return data;
+  }
 
-    public void addData(String string) {
-        addData(new AmfString(string));
-    }
+  public void addData(String string) {
+    addData(new AmfString(string));
+  }
 
-    public void addData(double number) {
-        addData(new AmfNumber(number));
-    }
-    
-    public void addData(boolean bool) {
-        addData(new AmfBoolean(bool));
-    }
+  public void addData(double number) {
+    addData(new AmfNumber(number));
+  }
 
-    public void addData(AmfData dataItem) {
-        if (data == null) {
-            this.data = new ArrayList<>();
-        }
-        if (dataItem == null) {
-            dataItem = new AmfNull();
-        }
-        this.data.add(dataItem);
-    }
+  public void addData(boolean bool) {
+    addData(new AmfBoolean(bool));
+  }
 
-    protected void readVariableData(final BufferedSource in, int bytesAlreadyRead) throws IOException {
-        // ...now read in arguments (if any)
-        do {
-            AmfData dataItem = AmfDecoder.readFrom(in);
-            addData(dataItem);
-            bytesAlreadyRead += dataItem.getSize();
-        } while (bytesAlreadyRead < header.getPacketLength());
+  public void addData(AmfData dataItem) {
+    if (data == null) {
+      this.data = new ArrayList<>();
     }
+    if (dataItem == null) {
+      dataItem = new AmfNull();
+    }
+    this.data.add(dataItem);
+  }
 
-    protected void writeVariableData(final BufferedSink out) throws IOException {
-        if (data != null) {
-            for (AmfData dataItem : data) {
-                dataItem.writeTo(out);
-            }
-        } else {
-            // Write a null
-            AmfNull.writeNullTo(out);
-        }
+  protected void readVariableData(final BufferedSource in, int bytesAlreadyRead) throws IOException {
+    // ...now read in arguments (if any)
+    do {
+      AmfData dataItem = AmfDecoder.readFrom(in);
+      addData(dataItem);
+      bytesAlreadyRead += dataItem.getSize();
+    } while (bytesAlreadyRead < header.getPacketLength());
+  }
+
+  protected void writeVariableData(final BufferedSink out) throws IOException {
+    if (data != null) {
+      for (AmfData dataItem : data) {
+        dataItem.writeTo(out);
+      }
+    } else {
+      // Write a null
+      AmfNull.writeNullTo(out);
     }
+  }
 }

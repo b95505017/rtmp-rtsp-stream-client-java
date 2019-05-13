@@ -12,63 +12,65 @@ import static com.github.faucamp.simplertmp.amf.AmfDecoder.AMF_NUMBER;
 
 /**
  * AMF0 Number data type
- * 
+ *
  * @author francois, yuhsuan.lin
  */
 public class AmfNumber implements AmfData {
 
-    private double value;
-    /** Size of an AMF number, in bytes (including type bit) */
-    public static final int SIZE = 9;
+  /**
+   * Size of an AMF number, in bytes (including type bit)
+   */
+  public static final int SIZE = 9;
+  private double value;
 
-    public AmfNumber(double value) {
-        this.value = value;
-    }
+  public AmfNumber(double value) {
+    this.value = value;
+  }
 
-    public AmfNumber() {
-    }
+  public AmfNumber() {
+  }
 
-    public double getValue() {
-        return value;
+  public static double readNumberFrom(BufferedSource in) throws IOException {
+    Buffer buffer;
+    if (!(in instanceof Buffer)) {
+      buffer = new Buffer();
+      in.readFully(buffer, 9);
+    } else {
+      buffer = (Buffer) in;
     }
+    // Skip data type byte
+    buffer.skip(1);
+    return Util.readDouble(buffer);
+  }
 
-    public void setValue(double value) {
-        this.value = value;
-    }    
-    
-    @Override
-    public void writeTo(BufferedSink out) throws IOException {
-        writeNumberTo(out, value);
-    }
+  public static void writeNumberTo(BufferedSink out, double number) throws IOException {
+    out.writeAll(new Buffer()
+            .writeByte(AMF_NUMBER)
+            .writeLong(Double.doubleToRawLongBits(number)));
+  }
 
-    @Override
-    public void readFrom(BufferedSource in) throws IOException {
-        // Skip data type byte (we assume it's already read)
-        value = Util.readDouble(in);
-    }
+  public double getValue() {
+    return value;
+  }
 
-    public static double readNumberFrom(BufferedSource in) throws IOException {
-        Buffer buffer;
-        if (!(in instanceof Buffer)) {
-            buffer = new Buffer();
-            in.readFully(buffer, 9);
-        } else {
-            buffer = (Buffer) in;
-        }
-        // Skip data type byte
-        buffer.skip(1);
-        return Util.readDouble(buffer);
-    }
+  public void setValue(double value) {
+    this.value = value;
+  }
 
-    public static void writeNumberTo(BufferedSink out, double number) throws IOException {
-        out.writeAll(new Buffer()
-                .writeByte(AMF_NUMBER)
-                .writeLong(Double.doubleToRawLongBits(number)));
-    }
-    
-    @Override
-    public int getSize() {
-        return SIZE;
-    }
-    
+  @Override
+  public void writeTo(BufferedSink out) throws IOException {
+    writeNumberTo(out, value);
+  }
+
+  @Override
+  public void readFrom(BufferedSource in) throws IOException {
+    // Skip data type byte (we assume it's already read)
+    value = Util.readDouble(in);
+  }
+
+  @Override
+  public int getSize() {
+    return SIZE;
+  }
+
 }
