@@ -1,6 +1,6 @@
 package com.github.faucamp.simplertmp.io;
 
-import android.support.v4.util.SparseArrayCompat;
+import androidx.collection.SparseArrayCompat;
 
 import com.github.faucamp.simplertmp.packets.RtmpPacket;
 

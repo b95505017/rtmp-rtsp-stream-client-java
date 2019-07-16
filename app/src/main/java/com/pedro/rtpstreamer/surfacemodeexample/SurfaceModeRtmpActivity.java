@@ -3,8 +3,8 @@ package com.pedro.rtpstreamer.surfacemodeexample;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.support.annotation.RequiresApi;
-import android.support.v7.app.AppCompatActivity;
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AppCompatActivity;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -80,6 +80,11 @@ public class SurfaceModeRtmpActivity extends AppCompatActivity
         button.setText(R.string.start_button);
       }
     });
+  }
+
+  @Override
+  public void onNewBitrateRtmp(long bitrate) {
+
   }
 
   @Override

@@ -9,7 +9,7 @@ import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
 import android.os.Build;
 import android.os.Bundle;
-import android.support.annotation.RequiresApi;
+import androidx.annotation.RequiresApi;
 import android.util.Log;
 import android.util.Pair;
 import android.view.Surface;
@@ -307,7 +307,8 @@ public class VideoEncoder implements GetCameraData {
         thread = null;
       }
       if (videoEncoder != null) {
-        videoEncoder.flush();
+        //First frame encoded so I can flush.
+        if (spsPpsSetted) videoEncoder.flush();
         videoEncoder.stop();
         videoEncoder.release();
         videoEncoder = null;

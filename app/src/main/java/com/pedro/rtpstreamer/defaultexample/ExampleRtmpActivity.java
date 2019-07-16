@@ -3,7 +3,7 @@ package com.pedro.rtpstreamer.defaultexample;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.support.v7.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatActivity;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -84,6 +84,11 @@ public class ExampleRtmpActivity extends AppCompatActivity
         }
       }
     });
+  }
+
+  @Override
+  public void onNewBitrateRtmp(long bitrate) {
+
   }
 
   @Override

@@ -5,7 +5,7 @@ import android.hardware.camera2.CameraCharacteristics;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.os.Build;
-import android.support.annotation.RequiresApi;
+import androidx.annotation.RequiresApi;
 import android.util.Size;
 import android.view.MotionEvent;
 import android.view.Surface;
@@ -22,6 +22,8 @@ import com.pedro.encoder.utils.CodecUtil;
 import com.pedro.encoder.video.FormatVideoEncoder;
 import com.pedro.encoder.video.GetVideoData;
 import com.pedro.encoder.video.VideoEncoder;
+import com.pedro.rtplibrary.util.FpsListener;
+import com.pedro.rtplibrary.util.RecordController;
 import com.pedro.rtplibrary.view.GlInterface;
 import com.pedro.rtplibrary.view.LightOpenGlView;
 import com.pedro.rtplibrary.view.OffScreenGlThread;
@@ -58,6 +60,7 @@ public abstract class Camera2Base implements GetAacData, GetVideoData, GetMicrop
   private boolean isBackground = false;
   private RecordController recordController;
   private int previewWidth, previewHeight;
+  private FpsListener fpsListener = new FpsListener();
 
   public Camera2Base(SurfaceView surfaceView) {
     this.surfaceView = surfaceView;
@@ -101,6 +104,13 @@ public abstract class Camera2Base implements GetAacData, GetVideoData, GetMicrop
     microphoneManager = new MicrophoneManager(this);
     audioEncoder = new AudioEncoder(this);
     recordController = new RecordController();
+  }
+
+  /**
+   * @param callback get fps while record or stream
+   */
+  public void setFpsListener(FpsListener.Callback callback) {
+    fpsListener.setCallback(callback);
   }
 
   /**
@@ -206,7 +216,8 @@ public abstract class Camera2Base implements GetAacData, GetVideoData, GetMicrop
       boolean noiseSuppressor) {
     microphoneManager.createMicrophone(sampleRate, isStereo, echoCanceler, noiseSuppressor);
     prepareAudioRtp(isStereo, sampleRate);
-    return audioEncoder.prepareAudioEncoder(bitrate, sampleRate, isStereo);
+    return audioEncoder.prepareAudioEncoder(bitrate, sampleRate, isStereo,
+        microphoneManager.getMaxInputSize());
   }
 
   /**
@@ -277,9 +288,9 @@ public abstract class Camera2Base implements GetAacData, GetVideoData, GetMicrop
    * com.pedro.encoder.input.video.CameraHelper#getCameraOrientation(Context)}
    */
   public void startPreview(CameraHelper.Facing cameraFacing, int width, int height, int rotation) {
-    previewWidth = width;
-    previewHeight = height;
     if (!isStreaming() && !onPreview && !isBackground) {
+      previewWidth = width;
+      previewHeight = height;
       if (surfaceView != null) {
         cameraManager.prepareCamera(surfaceView.getHolder().getSurface());
       } else if (textureView != null) {
@@ -711,13 +722,14 @@ public abstract class Camera2Base implements GetAacData, GetVideoData, GetMicrop
 
   @Override
   public void getVideoData(ByteBuffer h264Buffer, MediaCodec.BufferInfo info) {
+    fpsListener.calculateFps();
     recordController.recordVideo(h264Buffer, info);
     if (streaming) getH264DataRtp(h264Buffer, info);
   }
 
   @Override
-  public void inputPCMData(byte[] buffer, int size) {
-    audioEncoder.inputPCMData(buffer, size);
+  public void inputPCMData(byte[] buffer, int offset, int size) {
+    audioEncoder.inputPCMData(buffer, offset, size);
   }
 
   @Override

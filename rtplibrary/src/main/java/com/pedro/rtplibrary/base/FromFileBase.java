@@ -7,7 +7,7 @@ import android.media.AudioTrack;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.os.Build;
-import android.support.annotation.RequiresApi;
+import androidx.annotation.RequiresApi;
 import android.util.Log;
 import com.pedro.encoder.audio.AudioEncoder;
 import com.pedro.encoder.audio.GetAacData;
@@ -21,6 +21,8 @@ import com.pedro.encoder.utils.CodecUtil;
 import com.pedro.encoder.video.FormatVideoEncoder;
 import com.pedro.encoder.video.GetVideoData;
 import com.pedro.encoder.video.VideoEncoder;
+import com.pedro.rtplibrary.util.FpsListener;
+import com.pedro.rtplibrary.util.RecordController;
 import com.pedro.rtplibrary.view.GlInterface;
 import com.pedro.rtplibrary.view.LightOpenGlView;
 import com.pedro.rtplibrary.view.OffScreenGlThread;
@@ -51,6 +53,7 @@ public abstract class FromFileBase
   private boolean streaming = false;
   private boolean videoEnabled = true;
   private RecordController recordController;
+  private FpsListener fpsListener = new FpsListener();
 
   private VideoDecoder videoDecoder;
   private AudioDecoder audioDecoder;
@@ -104,6 +107,13 @@ public abstract class FromFileBase
   }
 
   /**
+   * @param callback get fps while record or stream
+   */
+  public void setFpsListener(FpsListener.Callback callback) {
+    fpsListener.setCallback(callback);
+  }
+
+  /**
    * Basic auth developed to work with Wowza. No tested with other server
    *
    * @param user auth.
@@ -143,7 +153,7 @@ public abstract class FromFileBase
     audioDecoder = new AudioDecoder(this, audioDecoderInterface, this);
     if (!audioDecoder.initExtractor(filePath)) return false;
     boolean result = audioEncoder.prepareAudioEncoder(bitRate, audioDecoder.getSampleRate(),
-        audioDecoder.isStereo());
+        audioDecoder.isStereo(), 0);
     prepareAudioRtp(audioDecoder.isStereo(), audioDecoder.getSampleRate());
     audioDecoder.prepareAudio();
     if (glInterface != null && !(glInterface instanceof OffScreenGlThread)) {
@@ -537,6 +547,7 @@ public abstract class FromFileBase
 
   @Override
   public void getVideoData(ByteBuffer h264Buffer, MediaCodec.BufferInfo info) {
+    fpsListener.calculateFps();
     recordController.recordVideo(h264Buffer, info);
     if (streaming) getH264DataRtp(h264Buffer, info);
   }
@@ -560,8 +571,8 @@ public abstract class FromFileBase
   }
 
   @Override
-  public void inputPCMData(byte[] buffer, int size) {
-    if (audioTrackPlayer != null) audioTrackPlayer.write(buffer, 0, size);
-    audioEncoder.inputPCMData(buffer, size);
+  public void inputPCMData(byte[] buffer, int offset, int size) {
+    if (audioTrackPlayer != null) audioTrackPlayer.write(buffer, offset, size);
+    audioEncoder.inputPCMData(buffer, offset, size);
   }
 }

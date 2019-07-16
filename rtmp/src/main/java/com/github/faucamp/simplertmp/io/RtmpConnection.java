@@ -20,6 +20,7 @@ import com.github.faucamp.simplertmp.packets.UserControl;
 import com.github.faucamp.simplertmp.packets.Video;
 import com.github.faucamp.simplertmp.packets.WindowAckSize;
 
+import net.ossrs.rtmp.BitrateManager;
 import net.ossrs.rtmp.ConnectCheckerRtmp;
 import net.ossrs.rtmp.CreateSSLSocket;
 
@@ -91,9 +92,11 @@ public class RtmpConnection implements RtmpPublisher {
   private String opaque = null;
   private boolean onAuth = false;
   private String netConnectionDescription;
+  private BitrateManager bitrateManager;
 
   public RtmpConnection(ConnectCheckerRtmp connectCheckerRtmp) {
     this.connectCheckerRtmp = connectCheckerRtmp;
+    bitrateManager = new BitrateManager(connectCheckerRtmp);
   }
 
   private static void handshake(BufferedSource in, BufferedSink out) throws IOException {
@@ -304,14 +307,6 @@ public class RtmpConnection implements RtmpPublisher {
     releaseStream.addData(streamName);  // command object: null for "releaseStream"
     sendRtmpPacket(releaseStream);
 
-    Log.d(TAG, "createStream(): Sending FCPublish command...");
-    // transactionId == 3
-    Command FCPublish = new Command("FCPublish", ++transactionIdCounter);
-    FCPublish.getHeader().setChunkStreamId(ChunkStreamInfo.RTMP_CID_OVER_STREAM);
-    FCPublish.addData(new AmfNull());  // command object: null for "FCPublish"
-    FCPublish.addData(streamName);
-    sendRtmpPacket(FCPublish);
-
     Log.d(TAG, "createStream(): Sending createStream command...");
     ChunkStreamInfo chunkStreamInfo =
             rtmpSessionInfo.getChunkStreamInfo(ChunkStreamInfo.RTMP_CID_OVER_CONNECTION);
@@ -319,6 +314,14 @@ public class RtmpConnection implements RtmpPublisher {
     Command createStream = new Command("createStream", ++transactionIdCounter, chunkStreamInfo);
     createStream.addData(new AmfNull());  // command object: null for "createStream"
     sendRtmpPacket(createStream);
+
+    Log.d(TAG, "createStream(): Sending FCPublish command...");
+    // transactionId == 3
+    Command FCPublish = new Command("FCPublish", ++transactionIdCounter);
+    FCPublish.getHeader().setChunkStreamId(ChunkStreamInfo.RTMP_CID_OVER_STREAM);
+    FCPublish.addData(new AmfNull());  // command object: null for "FCPublish"
+    FCPublish.addData(streamName);
+    sendRtmpPacket(FCPublish);
 
     // Waiting for "NetStream.Publish.Start" response.
     synchronized (publishLock) {
@@ -475,6 +478,8 @@ public class RtmpConnection implements RtmpPublisher {
     audio.getHeader().setAbsoluteTimestamp(dts);
     audio.getHeader().setMessageStreamId(currentStreamId);
     sendRtmpPacket(audio);
+    //bytes to bits
+    bitrateManager.calculateBitrate(size * 8);
   }
 
   @Override
@@ -492,6 +497,8 @@ public class RtmpConnection implements RtmpPublisher {
     video.getHeader().setAbsoluteTimestamp(dts);
     video.getHeader().setMessageStreamId(currentStreamId);
     sendRtmpPacket(video);
+    //bytes to bits
+    bitrateManager.calculateBitrate(size * 8);
   }
 
   private void sendRtmpPacket(RtmpPacket rtmpPacket) {
@@ -589,7 +596,21 @@ public class RtmpConnection implements RtmpPublisher {
       } catch (IOException e) {
         connectCheckerRtmp.onConnectionFailedRtmp("Error reading packet: " + e.getMessage());
         Log.e(TAG, "Caught SocketException while reading/decoding packet, shutting down: "
-                + e.getMessage());
+            + e.getMessage());
+        /**
+         * This is a temporal solution.
+         * ffmpeg server send packets so rare.
+         * He send part of the second packet in the first stream when you send create stream command.
+         * So packet parser crash for this reason we assume that publish is always permitted and send data.
+         * Maybe this is ffmpeg server bug (in page documentation it is an experimental command).
+         * */
+      } catch (IllegalArgumentException e) {
+        onMetaData();
+        // We can now publish AV data
+        publishPermitted = true;
+        synchronized (publishLock) {
+          publishLock.notifyAll();
+        }
       }
     }
   }

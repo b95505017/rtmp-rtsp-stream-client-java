@@ -6,8 +6,8 @@ import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
-import android.support.annotation.RequiresApi;
-import android.support.v7.app.AppCompatActivity;
+import androidx.annotation.RequiresApi;
+import androidx.appcompat.app.AppCompatActivity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
@@ -138,7 +138,7 @@ public class OpenGlRtspActivity extends AppCompatActivity
         return true;
       case R.id.android_view:
         AndroidViewFilterRender androidViewFilterRender = new AndroidViewFilterRender();
-        androidViewFilterRender.setView(findViewById(R.id.activity_example_rtmp));
+        androidViewFilterRender.setView(findViewById(R.id.switch_camera));
         rtspCamera1.getGlInterface().setFilter(androidViewFilterRender);
         return true;
       case R.id.basic_deformation:
@@ -333,6 +333,11 @@ public class OpenGlRtspActivity extends AppCompatActivity
         button.setText(R.string.start_button);
       }
     });
+  }
+
+  @Override
+  public void onNewBitrateRtsp(long bitrate) {
+
   }
 
   @Override

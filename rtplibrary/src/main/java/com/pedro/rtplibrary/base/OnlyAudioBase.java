@@ -50,7 +50,8 @@ public abstract class OnlyAudioBase implements GetAacData, GetMicrophoneData {
       boolean noiseSuppressor) {
     microphoneManager.createMicrophone(sampleRate, isStereo, echoCanceler, noiseSuppressor);
     prepareAudioRtp(isStereo, sampleRate);
-    return audioEncoder.prepareAudioEncoder(bitrate, sampleRate, isStereo);
+    return audioEncoder.prepareAudioEncoder(bitrate, sampleRate, isStereo,
+        microphoneManager.getMaxInputSize());
   }
 
   /**
@@ -82,6 +83,10 @@ public abstract class OnlyAudioBase implements GetAacData, GetMicrophoneData {
     audioEncoder.start();
     microphoneManager.start();
     startStreamRtp(url);
+  }
+
+  public void reTry(long delay) {
+    reConnect(delay);
   }
 
   protected abstract void stopStreamRtp();
@@ -164,8 +169,8 @@ public abstract class OnlyAudioBase implements GetAacData, GetMicrophoneData {
   }
 
   @Override
-  public void inputPCMData(byte[] buffer, int size) {
-    audioEncoder.inputPCMData(buffer, size);
+  public void inputPCMData(byte[] buffer, int offset, int size) {
+    audioEncoder.inputPCMData(buffer, offset, size);
   }
 
   @Override

@@ -1,6 +1,6 @@
 package com.github.faucamp.simplertmp.packets;
 
-import android.support.annotation.IntDef;
+import androidx.annotation.IntDef;
 
 import com.github.faucamp.simplertmp.Util;
 import com.github.faucamp.simplertmp.io.ChunkStreamInfo;

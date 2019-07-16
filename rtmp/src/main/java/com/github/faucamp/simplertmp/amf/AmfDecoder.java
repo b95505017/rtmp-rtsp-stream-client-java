@@ -1,6 +1,6 @@
 package com.github.faucamp.simplertmp.amf;
 
-import android.support.annotation.IntDef;
+import androidx.annotation.IntDef;
 
 import java.io.IOException;
 import java.lang.annotation.Retention;
