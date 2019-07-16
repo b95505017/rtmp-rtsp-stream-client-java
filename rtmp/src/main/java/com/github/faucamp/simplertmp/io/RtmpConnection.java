@@ -34,6 +34,8 @@ import java.util.Random;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.net.ssl.SSLException;
+
 import okio.BufferedSink;
 import okio.BufferedSource;
 import okio.Okio;
@@ -518,13 +520,13 @@ public class RtmpConnection implements RtmpPublisher {
                 ((Command) rtmpPacket).getCommandName());
       }
       outputStream.flush();
-    } catch (SocketException se) {
+    } catch (SocketException | SSLException se) {
       // Since there are still remaining AV frame in the cache, we set a flag to guarantee the
       // socket exception only issue one time.
       if (!socketExceptionCause.contentEquals(se.getMessage())) {
         socketExceptionCause = se.getMessage();
         connectCheckerRtmp.onConnectionFailedRtmp("Error send packet: " + se.getMessage());
-        Log.e(TAG, "Caught SocketException during write loop, shutting down: " + se.getMessage());
+        Log.e(TAG, "Caught SocketException/SSLException during write loop, shutting down: " + se.getMessage());
       }
     } catch (IOException ioe) {
       Log.e(TAG, "Caught IOException during write loop, shutting down: " + ioe.getMessage());
