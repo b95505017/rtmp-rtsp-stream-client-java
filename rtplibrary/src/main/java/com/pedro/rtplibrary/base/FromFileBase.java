@@ -7,8 +7,9 @@ import android.media.AudioTrack;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.os.Build;
-import androidx.annotation.RequiresApi;
 import android.util.Log;
+import androidx.annotation.RequiresApi;
+import com.pedro.encoder.Frame;
 import com.pedro.encoder.audio.AudioEncoder;
 import com.pedro.encoder.audio.GetAacData;
 import com.pedro.encoder.input.audio.GetMicrophoneData;
@@ -224,7 +225,7 @@ public abstract class FromFileBase
    */
   public void startStream(String url) {
     streaming = true;
-    if (!recordController.isRecording()) {
+    if (!recordController.isRunning()) {
       startEncoders();
     } else {
       resetVideoEncoder();
@@ -246,8 +247,8 @@ public abstract class FromFileBase
       if (glInterface instanceof OffScreenGlThread) {
         glInterface = new OffScreenGlThread(context);
         glInterface.init();
-        ((OffScreenGlThread) glInterface).setFps(videoEncoder.getFps());
       }
+      glInterface.setFps(videoEncoder.getFps());
       if (videoEncoder.getRotation() == 90 || videoEncoder.getRotation() == 270) {
         glInterface.setEncoderSize(videoEncoder.getHeight(), videoEncoder.getWidth());
       } else {
@@ -286,6 +287,11 @@ public abstract class FromFileBase
   }
 
   protected abstract void stopStreamRtp();
+
+  public void reTry(long delay) {
+    resetVideoEncoder();
+    reConnect(delay);
+  }
 
   //re connection
   public abstract void setReTries(int reTries);
@@ -362,23 +368,6 @@ public abstract class FromFileBase
     } else {
       throw new RuntimeException("You can't do it. You are not using Opengl");
     }
-  }
-
-  /**
-   * Disable send camera frames and send a black image with low bitrate(to reduce bandwith used)
-   * instance it.
-   */
-  public void disableVideo() {
-    videoEncoder.startSendBlackImage();
-    videoEnabled = false;
-  }
-
-  /**
-   * Enable send MP4 file frames.
-   */
-  public void enableVideo() {
-    videoEncoder.stopSendBlackImage();
-    videoEnabled = true;
   }
 
   public int getBitrate() {
@@ -571,8 +560,10 @@ public abstract class FromFileBase
   }
 
   @Override
-  public void inputPCMData(byte[] buffer, int offset, int size) {
-    if (audioTrackPlayer != null) audioTrackPlayer.write(buffer, offset, size);
-    audioEncoder.inputPCMData(buffer, offset, size);
+  public void inputPCMData(Frame frame) {
+    if (audioTrackPlayer != null) {
+      audioTrackPlayer.write(frame.getBuffer(), frame.getOffset(), frame.getSize());
+    }
+    audioEncoder.inputPCMData(frame);
   }
 }

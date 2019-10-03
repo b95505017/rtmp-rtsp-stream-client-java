@@ -10,9 +10,8 @@ import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.SurfaceView;
 import android.view.TextureView;
-
 import androidx.annotation.RequiresApi;
-
+import com.pedro.encoder.Frame;
 import com.pedro.encoder.audio.AudioEncoder;
 import com.pedro.encoder.audio.GetAacData;
 import com.pedro.encoder.input.audio.GetMicrophoneData;
@@ -362,7 +361,7 @@ public abstract class Camera2Base implements GetAacData, GetVideoData, GetMicrop
    */
   public void startStream(String url) {
     streaming = true;
-    if (!recordController.isRecording()) {
+    if (!recordController.isRunning()) {
       startEncoders();
     } else {
       resetVideoEncoder();
@@ -406,8 +405,8 @@ public abstract class Camera2Base implements GetAacData, GetVideoData, GetMicrop
       if (glInterface instanceof OffScreenGlThread) {
         glInterface = new OffScreenGlThread(context);
         glInterface.init();
-        ((OffScreenGlThread) glInterface).setFps(videoEncoder.getFps());
       }
+      glInterface.setFps(videoEncoder.getFps());
       if (videoEncoder.getRotation() == 90 || videoEncoder.getRotation() == 270) {
         glInterface.setEncoderSize(videoEncoder.getHeight(), videoEncoder.getWidth());
       } else {
@@ -544,23 +543,6 @@ public abstract class Camera2Base implements GetAacData, GetVideoData, GetMicrop
    */
   public boolean isVideoEnabled() {
     return videoEnabled;
-  }
-
-  /**
-   * Disable send camera frames and send a black image with low bitrate(to reduce bandwith used)
-   * instance it.
-   */
-  public void disableVideo() {
-    videoEncoder.startSendBlackImage();
-    videoEnabled = false;
-  }
-
-  /**
-   * Enable send camera frames.
-   */
-  public void enableVideo() {
-    videoEncoder.stopSendBlackImage();
-    videoEnabled = true;
   }
 
   /**
@@ -736,8 +718,8 @@ public abstract class Camera2Base implements GetAacData, GetVideoData, GetMicrop
   }
 
   @Override
-  public void inputPCMData(byte[] buffer, int offset, int size) {
-    audioEncoder.inputPCMData(buffer, offset, size);
+  public void inputPCMData(Frame frame) {
+    audioEncoder.inputPCMData(frame);
   }
 
   @Override

@@ -82,11 +82,9 @@ public class LightOpenGlView extends OpenGlViewBase {
           takePhotoCallback = null;
         }
         synchronized (sync) {
-          if (surfaceManagerEncoder != null) {
+          if (surfaceManagerEncoder != null && !fpsLimiter.limitFPS()) {
             surfaceManagerEncoder.makeCurrent();
             simpleCameraRender.drawFrame(encoderWidth, encoderHeight, false);
-            long ts = simpleCameraRender.getSurfaceTexture().getTimestamp();
-            surfaceManagerEncoder.setPresentationTime(ts);
             surfaceManagerEncoder.swapBuffer();
           }
         }

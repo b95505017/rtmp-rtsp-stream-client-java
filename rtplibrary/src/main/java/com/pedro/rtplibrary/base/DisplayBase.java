@@ -8,9 +8,10 @@ import android.media.MediaFormat;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
-import androidx.annotation.RequiresApi;
 import android.view.Surface;
 import android.view.SurfaceView;
+import androidx.annotation.RequiresApi;
+import com.pedro.encoder.Frame;
 import com.pedro.encoder.audio.AudioEncoder;
 import com.pedro.encoder.audio.GetAacData;
 import com.pedro.encoder.input.audio.GetMicrophoneData;
@@ -226,7 +227,7 @@ public abstract class DisplayBase implements GetAacData, GetVideoData, GetMicrop
    */
   public void startStream(String url) {
     streaming = true;
-    if (!recordController.isRecording()) {
+    if (!recordController.isRunning()) {
       startEncoders(resultCode, data);
     } else {
       resetVideoEncoder();
@@ -290,6 +291,11 @@ public abstract class DisplayBase implements GetAacData, GetVideoData, GetMicrop
       data = null;
       recordController.resetFormats();
     }
+  }
+
+  public void reTry(long delay) {
+    resetVideoEncoder();
+    reConnect(delay);
   }
 
   //re connection
@@ -358,23 +364,6 @@ public abstract class DisplayBase implements GetAacData, GetVideoData, GetMicrop
    */
   public boolean isVideoEnabled() {
     return videoEnabled;
-  }
-
-  /**
-   * Disable send camera frames and send a black image with low bitrate(to reduce bandwith used)
-   * instance it.
-   */
-  public void disableVideo() {
-    videoEncoder.startSendBlackImage();
-    videoEnabled = false;
-  }
-
-  /**
-   * Enable send display screen frames.
-   */
-  public void enableVideo() {
-    videoEncoder.stopSendBlackImage();
-    videoEnabled = true;
   }
 
   public int getBitrate() {
@@ -472,8 +461,8 @@ public abstract class DisplayBase implements GetAacData, GetVideoData, GetMicrop
   }
 
   @Override
-  public void inputPCMData(byte[] buffer, int offset, int size) {
-    audioEncoder.inputPCMData(buffer, offset, size);
+  public void inputPCMData(Frame frame) {
+    audioEncoder.inputPCMData(frame);
   }
 
   @Override

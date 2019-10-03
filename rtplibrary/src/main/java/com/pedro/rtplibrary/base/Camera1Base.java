@@ -5,11 +5,12 @@ import android.hardware.Camera;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.os.Build;
-import androidx.annotation.RequiresApi;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.view.TextureView;
+import androidx.annotation.RequiresApi;
+import com.pedro.encoder.Frame;
 import com.pedro.encoder.audio.AudioEncoder;
 import com.pedro.encoder.audio.GetAacData;
 import com.pedro.encoder.input.audio.GetMicrophoneData;
@@ -17,7 +18,6 @@ import com.pedro.encoder.input.audio.MicrophoneManager;
 import com.pedro.encoder.input.video.Camera1ApiManager;
 import com.pedro.encoder.input.video.CameraHelper;
 import com.pedro.encoder.input.video.CameraOpenException;
-import com.pedro.encoder.input.video.Frame;
 import com.pedro.encoder.input.video.GetCameraData;
 import com.pedro.encoder.utils.CodecUtil;
 import com.pedro.encoder.video.FormatVideoEncoder;
@@ -383,7 +383,7 @@ public abstract class Camera1Base
    */
   public void startStream(String url) {
     streaming = true;
-    if (!recordController.isRecording()) {
+    if (!recordController.isRunning()) {
       startEncoders();
     } else {
       resetVideoEncoder();
@@ -420,8 +420,8 @@ public abstract class Camera1Base
       if (glInterface instanceof OffScreenGlThread) {
         glInterface = new OffScreenGlThread(context);
         glInterface.init();
-        ((OffScreenGlThread) glInterface).setFps(videoEncoder.getFps());
       }
+      glInterface.setFps(videoEncoder.getFps());
       if (videoEncoder.getRotation() == 90 || videoEncoder.getRotation() == 270) {
         glInterface.setEncoderSize(videoEncoder.getHeight(), videoEncoder.getWidth());
       } else {
@@ -545,23 +545,6 @@ public abstract class Camera1Base
    */
   public boolean isVideoEnabled() {
     return videoEnabled;
-  }
-
-  /**
-   * Disable send camera frames and send a black image with low bitrate(to reduce bandwith used)
-   * instance it.
-   */
-  public void disableVideo() {
-    videoEncoder.startSendBlackImage();
-    videoEnabled = false;
-  }
-
-  /**
-   * Enable send camera frames.
-   */
-  public void enableVideo() {
-    videoEncoder.stopSendBlackImage();
-    videoEnabled = true;
   }
 
   public int getBitrate() {
@@ -692,8 +675,8 @@ public abstract class Camera1Base
   }
 
   @Override
-  public void inputPCMData(byte[] buffer, int offset, int size) {
-    audioEncoder.inputPCMData(buffer, offset, size);
+  public void inputPCMData(Frame frame) {
+    audioEncoder.inputPCMData(frame);
   }
 
   @Override
